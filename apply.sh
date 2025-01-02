@@ -24,7 +24,8 @@ fi
 # Generate config:
 cat > Comtrya.yaml <<EOF
 variables:
-  root: "$ROOT"
+    machine: "$MACHINE"
+    root: "$ROOT"
 EOF
 
 # Apply!

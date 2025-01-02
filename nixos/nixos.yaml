@@ -2,5 +2,6 @@ actions:
     - action: file.copy
       from: configuration.nix
       to: "{{ variables.root }}/etc/nixos/configuration.nix"
+      template: true
       owned_by_user: root
       owned_by_group: root
