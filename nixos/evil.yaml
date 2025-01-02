@@ -1,0 +1,9 @@
+depends:
+    - nixos
+
+actions:
+    - action: file.copy
+      from: hw-evil.nix
+      to: "{{ variables.root }}/etc/nixos/hardware-configuration.nix"
+      owned_by_user: root
+      owned_by_group: root
