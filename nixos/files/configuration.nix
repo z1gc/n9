@@ -6,7 +6,7 @@
 
 {
   imports =
-    [ # Include the results of the hardware scan.
+    [ # nixos-generate-config --show-hardware-config
       ./hardware-configuration.nix
     ];
 
