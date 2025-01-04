@@ -4,11 +4,38 @@
 
 { config, lib, pkgs, ... }:
 
+let
+  aptenodytesChannel =
+    fetchTarball https://github.com/z1gc/unstable/archive/main.tar.gz;
+
+  # https://nixos.wiki/wiki/Overlays
+  overlay = (self: super: {
+    helix = super.helix.overrideAttrs (prev: {
+      version = "unstable";
+      src = pkgs.fetchFromGitHub {
+        owner = "z1gc";
+        repo = "helix";
+        rev = "09e59e29725b66f55cf5d9be25268924f74004f5";
+      };
+    });
+  });
+in
 {
   imports =
     [ # nixos-generate-config --show-hardware-config
       ./hardware-configuration.nix
     ];
+
+  # https://stackoverflow.com/a/48838322
+  nixpkgs.config = {
+    packageOverrides = pkgs: {
+      aptenodytes = import aptenodytesChannel {
+        config = config.nixpkgs.config;
+      };
+    };
+  };
+
+  nixpkgs.overlays = [ overlay ]
 
   # https://nixos.wiki/wiki/Btrfs
   fileSystems = {
@@ -73,9 +100,7 @@
     uid = 1000;
     group = "byte";
     extraGroups = [ "wheel" ]; # Enable ‘sudo’ for the user.
-    packages = with pkgs; [
-      git
-    ];
+    packages = with pkgs; [ ]; # Have no idea what should place.
   };
 
   # programs.firefox.enable = true;
@@ -83,8 +108,12 @@
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-    kakoune
     wget
+    git
+    helix
+
+    # Not in Stable:
+    aptenodytes.comtrya
   ];
 
   # Some programs need SUID wrappers, can be configured further or are
