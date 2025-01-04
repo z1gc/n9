@@ -4,6 +4,7 @@ set -ue
 
 DISK=
 PARTITION=
+REMOTE=false
 
 # Arguments parsing:
 while true; do
@@ -11,6 +12,10 @@ while true; do
     "-p")
         DISK="${2:-}"
         shift 2
+    ;;
+    "-r")
+        REMOTE=true
+        shift 1
     ;;
     *)
         break
@@ -26,17 +31,11 @@ ROOT="${ROOT%/}"
 if [[ "$MACHINE" == "" ]]; then
     echo "$0 [OPTIONS] MACHINE [ROOT]"
     echo "    -p DISK    Partition the disk (DANGEROUS!)"
+    echo "    -r         Test remote manifest (via git)"
     exit 1
 fi
 
 if [[ "$DISK" != "" ]]; then
-    read -p "The $DISK will be destroyed! Y? " -n 1 -r
-    echo
-
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-
     if [[ "$ROOT" == "" ]]; then
         echo "Must set a mountpoint (e.g. /mnt)"
         exit 1
@@ -68,40 +67,47 @@ if [[ "$DISK" != "" ]]; then
         echo "Subpartition provided, won't deal with that :/"
         exit 1
     fi
+
+    read -p "The $DISK will be destroyed! Y? " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
 fi
 
 # To here, or to tmp (TODO: cleanup?):
 cd "$(dirname "${BASH_SOURCE[0]}")"
-if [[ ! -d .git ]]; then
+if $REMOTE || [[ ! -d .git ]]; then
     mkdir -p /tmp/unstable
     cd /tmp/unstable
     MANIFEST=https://github.com/z1gc/unstable#main:nixos
 fi
 
 # Check comtrya:
-if [[ ! -f comtrya ]]; then
-    # shellcheck disable=SC2016
-    curl -fsSL https://get.comtrya.dev | sed 's/$BINLOCATION/./g' | bash || true
-    if ! ./comtrya version; then
-        rm -f ./comtrya
-        echo "Wrong binary, please retry :("
+if ! sudo which comtrya; then
+    sudo nix-channel --add https://github.com/z1gc/unstable/archive/main.tar.gz aptenodytes
+    sudo -E nix-channel --update aptenodytes
+    sudo -E nix-env -iA aptenodytes.comtrya
+
+    if ! sudo comtrya version; then
+        echo "Install comtrya failed, maybe you have solutions?"
         exit 1
     fi
 fi
 
 # Generate config:
-cat > Comtrya.yaml <<EOF
+cat > .comtrya.yaml <<EOF
 variables:
-    machine: "$MACHINE"
-    root: "$ROOT"
-    disk: "$DISK"
-    partition: "$PARTITION"
+  machine: "$MACHINE"
+  root: "$ROOT"
+  disk: "$DISK"
+  partition: "$PARTITION"
 EOF
 
 # Apply!
-sudo ./comtrya -v -d $MANIFEST apply -m "$MACHINE"
+sudo -E comtrya -v -c .comtrya.yaml -d $MANIFEST apply -m "$MACHINE"
 
 echo "Next step (run either one manually):"
 echo "    => nixos-install"
 echo " or => nixos-rebuild switch"
-echo "(Don't forget to check your \"/etc/nixos\"!)"
+echo "(Don't forget to check your \"$ROOT/etc/nixos\"!)"

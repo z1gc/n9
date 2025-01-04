@@ -1,141 +1,104 @@
 actions:
-    # Not a huge fan of swap, just want to reduce the system pressure.
-    # And with a swap partition, you can reuse it when you need, such as luks
-    # full disk encryption, or expand the /efi partition.
-    # https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_storage_devices/getting-started-with-swap_managing-storage-devices
-    - action: command.run
-      where: "!variables.disk.is_empty"
-      command: parted
-      args:
-          - "{{ variables.disk }}"
-          - --script
-          - --
-          - mklabel gpt
-          - mkpart "EFI system partition" fat32 1MiB 1GiB
-          - set 1 esp on
-          - mkpart swap linux-swap 1GiB 16GiB
-          - mkpart root btrfs 16GiB 100%
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty"
-      command: mkfs.fat32
-      args:
-          - -F
-          - "32"
-          - -n
-          - boot
-          - "{{ variables.disk }}{{ variables.partition }}1"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty"
-      command: mkswap
-      args:
-          - -L
-          - swap
-          - "{{ variables.disk }}{{ variables.partition }}2"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty"
-      command: mkfs.btrfs
-      args:
-          - "{{ variables.disk }}{{ variables.partition }}3"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: mount
-      args:
-          - "{{ variables.disk }}{{ variables.partition }}3"
-          - "{{ variables.root }}"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: btrfs
-      args:
-          - subvolume
-          - create
-          - "{{ variables.root }}/@root"
-          - "{{ variables.root }}/@home"
-          - "{{ variables.root }}/@nix"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: umount
-      args:
-          - "{{ variables.root }}"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: mount
-      args:
-          - -o
-          - compress=zstd,subvol=@root
-          - "{{ variables.disk }}{{ variables.partition }}3"
-          - "{{ variables.root }}"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: mkdir
-      args:
-          - -p
-          - "{{ variables.root }}/efi"
-          - "{{ variables.root }}/home"
-          - "{{ variables.root }}/nix"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: mount
-      args:
-          - "{{ variables.disk }}{{ variables.partition }}1"
-          - "{{ variables.root }}/efi"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: swapon
-      args:
-          - "{{ variables.disk }}{{ variables.partition }}2"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: mount
-      args:
-          - -o
-          - compress=zstd,subvol=@home
-          - "{{ variables.disk }}{{ variables.partition }}3"
-          - "{{ variables.root }}/home"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: mount
-      args:
-          - -o
-          - compress=zstd,noatime,subvol=@nix
-          - "{{ variables.disk }}{{ variables.partition }}3"
-          - "{{ variables.root }}/nix"
-      privileged: true
-
-    - action: command.run
-      where: "!variables.disk.is_empty && !variables.root.is_empty"
-      command: nixos-generate-config
-      args:
-          - --root
-          - "{{ variables.root }}"
-      privileged: true
-
-    - action: file.copy
-      from: configuration.nix
-      to: "{{ variables.root }}/etc/nixos/configuration.nix"
-      template: true
-      owned_by_user: root
-      owned_by_group: root
+  - action: command.run
+    args:
+      - '{{ variables.disk }}'
+      - --script
+      - --
+      - mklabel gpt
+      - mkpart "EFI system partition" fat32 1MiB 1GiB
+      - set 1 esp on
+      - mkpart swap linux-swap 1GiB 16GiB
+      - mkpart root btrfs 16GiB 100%
+    command: parted
+    privileged: true
+    where: '!variables.disk.is_empty'
+  - action: command.run
+    args:
+      - -t
+    command: mkfs
+    privileged: true
+    where: '!variables.disk.is_empty'
+    xargs:
+      - - fat
+        - -F
+        - "32"
+        - -n
+        - boot
+        - '{{ variables.disk }}{{ variables.partition }}1'
+      - - btrfs
+        - '{{ variables.disk }}{{ variables.partition }}3'
+  # Not a huge fan of swap, just want to reduce the system pressure.
+  # And with a swap partition, you can reuse it when you need, such as luks
+  # full disk encryption, or expand the /efi partition.
+  # https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_storage_devices/getting-started-with-swap_managing-storage-devices
+  - action: command.run
+    args:
+      - -L
+      - swap
+      - '{{ variables.disk }}{{ variables.partition }}2'
+    command: mkswap
+    privileged: true
+    where: '!variables.disk.is_empty'
+  - action: command.run
+    args:
+      - '{{ variables.disk }}{{ variables.partition }}3'
+      - '{{ variables.root }}'
+    command: mount
+    privileged: true
+    where: '!variables.disk.is_empty && !variables.root.is_empty'
+  - action: command.run
+    args:
+      - subvolume
+      - create
+      - '{{ variables.root }}/@root'
+      - '{{ variables.root }}/@home'
+      - '{{ variables.root }}/@nix'
+    command: btrfs
+    privileged: true
+    where: '!variables.disk.is_empty && !variables.root.is_empty'
+  - action: command.run
+    args:
+      - '{{ variables.root }}'
+    command: umount
+    privileged: true
+    where: '!variables.disk.is_empty && !variables.root.is_empty'
+  - action: command.run
+    args:
+      - -m
+    command: mount
+    privileged: true
+    where: '!variables.disk.is_empty && !variables.root.is_empty'
+    xargs:
+      - - -o
+        - compress=zstd,subvol=@root
+        - '{{ variables.disk }}{{ variables.partition }}3'
+        - '{{ variables.root }}'
+      - - '{{ variables.disk }}{{ variables.partition }}1'
+        - '{{ variables.root }}/efi'
+      - - -o
+        - compress=zstd,subvol=@home
+        - '{{ variables.disk }}{{ variables.partition }}3'
+        - '{{ variables.root }}/home'
+      - - -o
+        - compress=zstd,noatime,subvol=@nix
+        - '{{ variables.disk }}{{ variables.partition }}3'
+        - '{{ variables.root }}/nix'
+  - action: command.run
+    args:
+      - '{{ variables.disk }}{{ variables.partition }}2'
+    command: swapon
+    privileged: true
+    where: '!variables.disk.is_empty && !variables.root.is_empty'
+  - action: command.run
+    args:
+      - --root
+      - '{{ variables.root }}'
+    command: nixos-generate-config
+    privileged: true
+    where: '!variables.disk.is_empty && !variables.root.is_empty'
+  - action: file.copy
+    from: configuration.nix
+    owned_by_group: root
+    owned_by_user: root
+    template: true
+    to: '{{ variables.root }}/etc/nixos/configuration.nix'
