@@ -91,10 +91,3 @@ actions:
     xargs:
       - [--add, "https://channels.nixos.org/nixos-{{ vars.channel }}", nixos]
       - [--update]
-  - action: command.run
-    command: nixos-rebuild
-    args: [switch, --upgrade]
-    variants:
-      - where: "!vars.root.is_empty"
-        command: nixos-install
-        args: [--root, "{{ vars.root }}"]

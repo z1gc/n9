@@ -69,7 +69,7 @@ while true; do
     esac
 done
 
-MANIFEST=nixos
+MANIFEST=.
 MACHINE="${1:-"$(hostname)"}"
 ROOT="${2:-}"
 ROOT="${ROOT%/}"
@@ -124,7 +124,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 if $REMOTE || [[ ! -d .git ]]; then
     mkdir -p /tmp/n9
     cd /tmp/n9
-    MANIFEST=https://github.com/z1gc/n9#main:nixos
+    MANIFEST=https://github.com/z1gc/n9
 fi
 
 # Check comtrya:
@@ -152,4 +152,4 @@ EOF
 
 # Apply!
 # TODO: Can we have only the nix, without comtrya's bootstrap?
-$SUDO comtrya -v -c .comtrya.yaml -d $MANIFEST apply -m "$MACHINE"
+$SUDO comtrya -v -c .comtrya.yaml -d $MANIFEST apply -m nixos.g

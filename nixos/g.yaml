@@ -1,0 +1,13 @@
+depends:
+  - "dev.{{ vars.machine }}"
+
+actions:
+  # Last Step Ride
+  # ==============
+  - action: command.run
+    command: nixos-rebuild
+    args: [switch, --upgrade]
+    variants:
+      - where: "!vars.root.is_empty"
+        command: nixos-install
+        args: [--root, "{{ vars.root }}"]

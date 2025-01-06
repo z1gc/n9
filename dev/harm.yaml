@@ -1,5 +1,5 @@
 depends:
-  - nixos
+  - nixos.u
 
 # Hyper-V in ARM64
 actions:
