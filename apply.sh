@@ -148,10 +148,5 @@ variables:
 EOF
 
 # Apply!
-$SUDO comtrya -v -c .comtrya.yaml -d $MANIFEST apply -m "$MACHINE"
-
 # TODO: Can we have only the nix, without comtrya's bootstrap?
-echo "Next step (run either one manually):"
-echo "    => $SUDO nixos-install"
-echo " or => $SUDO nixos-rebuild switch --upgrade"
-echo "(Don't forget to check your \"$ROOT/etc/nixos\"!)"
+$SUDO comtrya -v -c .comtrya.yaml -d $MANIFEST apply -m "$MACHINE"

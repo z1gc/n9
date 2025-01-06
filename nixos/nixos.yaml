@@ -3,10 +3,10 @@ actions:
   # ==============
   # /efi ~1GiB, swap 15GiB, root remains
   - action: command.run
-    where: '!variables.disk.is_empty && variables.wipe'
+    where: '!vars.disk.is_empty && vars.wipe'
     command: parted
     args:
-      - '{{ variables.disk }}'
+      - '{{ vars.disk }}'
       - --script
       - --
       - mklabel gpt
@@ -18,82 +18,82 @@ actions:
   # ================
   # /efi fat32, swap swap, root btrfs
   - action: command.run
-    where: '!variables.partition.is_empty && variables.wipe'
+    where: '!vars.partition.is_empty && vars.wipe'
     command: mkfs
     args: [-t]
     xargs:
-      - [fat, -F, "32", -n, boot, "{{ variables.partition }}1"]
-      - [btrfs, "{{ variables.partition }}3"]
+      - [fat, -F, "32", -n, boot, "{{ vars.partition }}1"]
+      - [btrfs, "{{ vars.partition }}3"]
   # Swap here is not for hibernating, is for reducing the memory pressure.
   # Also you can reuse it when you need, such as LUKS, or /efi expansion.
   # https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_storage_devices/getting-started-with-swap_managing-storage-devices
   - action: command.run
-    where: '!variables.partition.is_empty && variables.wipe'
+    where: '!vars.partition.is_empty && vars.wipe'
     command: mkswap
-    args: [-L, swap, "{{ variables.partition }}2"]
+    args: [-L, swap, "{{ vars.partition }}2"]
   # Btrfs Subvolumes
   # ================
   # @root /, @home /home, @nix /nix
   - action: command.run
-    where: '!variables.partition.is_empty && !variables.root.is_empty && variables.wipe'
+    where: '!vars.partition.is_empty && !vars.root.is_empty && vars.wipe'
     command: mount
-    args: ["{{ variables.partition}}3", "{{ variables.root }}"]
+    args: ["{{ vars.partition}}3", "{{ vars.root }}"]
   - action: command.run
-    where: '!variables.partition.is_empty && !variables.root.is_empty && variables.wipe'
+    where: '!vars.partition.is_empty && !vars.root.is_empty && vars.wipe'
     command: btrfs
-    args:
-      - subvolume
-      - create
-      - '{{ variables.root }}/@root'
-      - '{{ variables.root }}/@home'
-      - '{{ variables.root }}/@nix'
+    args: [subvolume, create, "{{ vars.root }}/@root",
+                              "{{ vars.root }}/@home",
+                              "{{ vars.root }}/@nix"]
   # Mount Rootfs, Swap
   # ==================
   - action: command.run
-    where: '!variables.partition.is_empty && !variables.root.is_empty'
+    where: '!vars.partition.is_empty && !vars.root.is_empty'
     command: umount
-    args: [-R, "{{ variables.root }}"]
+    args: [-R, "{{ vars.root }}"]
     ignore_errors: true
   - action: command.run
-    where: '!variables.partition.is_empty && !variables.root.is_empty'
+    where: '!vars.partition.is_empty && !vars.root.is_empty'
     command: mount
     args: [-m]
     xargs:
-      - [-o, compress=zstd,subvol=@root, "{{ variables.partition }}3", "{{ variables.root }}"]
-      - ["{{ variables.partition }}1", "{{ variables.root }}/efi"]
-      - [-o, compress=zstd,subvol=@home, "{{ variables.partition }}3", "{{ variables.root }}/home"]
-      - [-o, compress=zstd,noatime,subvol=@nix, "{{ variables.partition}}3", "{{ variables.root }}/nix"]
+      - [-o, "compress=zstd,subvol=@root", "{{ vars.partition }}3", "{{ vars.root }}"]
+      - ["{{ vars.partition }}1", "{{ vars.root }}/efi"]
+      - [-o, "compress=zstd,subvol=@home", "{{ vars.partition }}3", "{{ vars.root }}/home"]
+      - [-o, "compress=zstd,noatime,subvol=@nix", "{{ vars.partition}}3", "{{ vars.root }}/nix"]
   - action: command.run
-    where: '!variables.partition.is_empty && !variables.root.is_empty'
+    where: '!vars.partition.is_empty && !vars.root.is_empty'
     command: swapoff
-    args: ["{{ variables.partition }}2"]
+    args: ["{{ vars.partition }}2"]
     ignore_errors: true
   - action: command.run
-    where: '!variables.partition.is_empty && !variables.root.is_empty'
+    where: '!vars.partition.is_empty && !vars.root.is_empty'
     command: swapon
-    args: ["{{ variables.partition }}2"]
+    args: ["{{ vars.partition }}2"]
   # NixOS Here
   # ==========
   # Should use the most recent NixOS ISO image to do a fresh install.
   - action: command.run
-    command: nix-channel
-    xargs:
-      - [--add, "https://channels.nixos.org/nixos-{{ variables.channel }}", nixos]
-      - [--update]
+    command: nixos-generate-config
     variants:
-      - where: '!variables.root.is_empty'
+      - where: '!vars.root.is_empty'
         command: nixos-generate-config
-        args: [--root, "{{ variables.root }}"]
+        args: [--root, "{{ vars.root }}"]
   - action: file.copy
     from: configuration.nix
     owned_by_group: root
     owned_by_user: root
     template: true
-    to: '{{ variables.root }}/etc/nixos/configuration.nix'
+    to: '{{ vars.root }}/etc/nixos/configuration.nix'
   - action: command.run
+    command: nix-channel
+    xargs:
+      - [--add, "https://channels.nixos.org/nixos-{{ vars.channel }}", nixos]
+      - [--update]
+    variants:
+      - where: '!vars.root.is_empty'
+        command: nixos-install
+        args: [--root, "{{ vars.root }}", --channel, "https://channels.nixos.org/nixos-{{ vars.channel }}"]
+  - action: command.run
+    where: vars.root.is_empty
     command: nixos-rebuild
     args: [switch, --upgrade]
-    variants:
-      - where: '!variables.root.is_empty'
-        command: nixos-install
-        args: [--root, "{{ variables.root }}"]

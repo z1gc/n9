@@ -8,19 +8,19 @@
 }:
 
 # To rebuild: rm result && nix-collect-garbage
-# Then build: nix-build . -A comtrya
+# Then build: nix-build --check . -A comtrya
 # TODO: better way of rebuilding? These steps will re-copy the dependencies.
 # You might want to `export NIX_CRATES_INDEX=<mirror_of_crates_io>` first.
 rustPlatform.buildRustPackage rec {
   pname = "comtrya";
-  version = "git";
+  version = "cdf55de48c4629a72a6fa2f5de622c2887d04115";
 
   # have to comment out the hash if the repo is updated (version unchanged):
   src = fetchFromGitHub {
     owner = "z1gc";
     repo = "${pname}";
-    rev = "8c05cf81f35fa0e5faefe4ce3f61407725ad81d7";
-    hash = "sha256-D06qvKCaX7eRpNIHmyKOAFclVQvL+7/+V0290HR/Q9w=";
+    rev = version;
+    hash = "sha256-yEtQbMRttO5tKjwlaTUEtXyGg8ul1Q5gM4vfXX03qik=";
   };
 
   cargoHash = "sha256-ak2HnBpsuzq04uwOTDBTO8KRjajsLfyfY10SdrUX4qY=";
