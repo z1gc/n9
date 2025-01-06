@@ -23,7 +23,7 @@ actions:
     args: [-t]
     xargs:
       - [fat, -F, "32", -n, boot, "{{ vars.partition }}1"]
-      - [btrfs, "{{ vars.partition }}3"]
+      - [btrfs, -f, "{{ vars.partition }}3"]
   # Swap here is not for hibernating, is for reducing the memory pressure.
   # Also you can reuse it when you need, such as LUKS, or /efi expansion.
   # https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_storage_devices/getting-started-with-swap_managing-storage-devices
@@ -91,11 +91,10 @@ actions:
     xargs:
       - [--add, "https://channels.nixos.org/nixos-{{ vars.channel }}", nixos]
       - [--update]
+  - action: command.run
+    command: nixos-rebuild
+    args: [switch, --upgrade]
     variants:
       - where: "!vars.root.is_empty"
         command: nixos-install
-        args: [--root, "{{ vars.root }}", --channel, "https://channels.nixos.org/nixos-{{ vars.channel }}"]
-  - action: command.run
-    where: vars.root.is_empty
-    command: nixos-rebuild
-    args: [switch, --upgrade]
+        args: [--root, "{{ vars.root }}"]
