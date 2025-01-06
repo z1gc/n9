@@ -3,7 +3,7 @@ actions:
   # ==============
   # /efi ~1GiB, swap 15GiB, root remains
   - action: command.run
-    where: '!vars.disk.is_empty && vars.wipe'
+    where: "!vars.disk.is_empty && vars.wipe"
     command: parted
     args:
       - '{{ vars.disk }}'
@@ -18,7 +18,7 @@ actions:
   # ================
   # /efi fat32, swap swap, root btrfs
   - action: command.run
-    where: '!vars.partition.is_empty && vars.wipe'
+    where: "!vars.partition.is_empty && vars.wipe"
     command: mkfs
     args: [-t]
     xargs:
@@ -28,18 +28,18 @@ actions:
   # Also you can reuse it when you need, such as LUKS, or /efi expansion.
   # https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_storage_devices/getting-started-with-swap_managing-storage-devices
   - action: command.run
-    where: '!vars.partition.is_empty && vars.wipe'
+    where: "!vars.partition.is_empty && vars.wipe"
     command: mkswap
     args: [-L, swap, "{{ vars.partition }}2"]
   # Btrfs Subvolumes
   # ================
   # @root /, @home /home, @nix /nix
   - action: command.run
-    where: '!vars.partition.is_empty && !vars.root.is_empty && vars.wipe'
+    where: "!vars.partition.is_empty && !vars.root.is_empty && vars.wipe"
     command: mount
     args: ["{{ vars.partition}}3", "{{ vars.root }}"]
   - action: command.run
-    where: '!vars.partition.is_empty && !vars.root.is_empty && vars.wipe'
+    where: "!vars.partition.is_empty && !vars.root.is_empty && vars.wipe"
     command: btrfs
     args: [subvolume, create, "{{ vars.root }}/@root",
                               "{{ vars.root }}/@home",
@@ -47,12 +47,12 @@ actions:
   # Mount Rootfs, Swap
   # ==================
   - action: command.run
-    where: '!vars.partition.is_empty && !vars.root.is_empty'
+    where: "!vars.partition.is_empty && !vars.root.is_empty"
     command: umount
     args: [-R, "{{ vars.root }}"]
     ignore_errors: true
   - action: command.run
-    where: '!vars.partition.is_empty && !vars.root.is_empty'
+    where: "!vars.partition.is_empty && !vars.root.is_empty"
     command: mount
     args: [-m]
     xargs:
@@ -61,29 +61,28 @@ actions:
       - [-o, "compress=zstd,subvol=@home", "{{ vars.partition }}3", "{{ vars.root }}/home"]
       - [-o, "compress=zstd,noatime,subvol=@nix", "{{ vars.partition}}3", "{{ vars.root }}/nix"]
   - action: command.run
-    where: '!vars.partition.is_empty && !vars.root.is_empty'
+    where: "!vars.partition.is_empty && !vars.root.is_empty"
     command: swapoff
     args: ["{{ vars.partition }}2"]
     ignore_errors: true
   - action: command.run
-    where: '!vars.partition.is_empty && !vars.root.is_empty'
+    where: "!vars.partition.is_empty && !vars.root.is_empty"
     command: swapon
     args: ["{{ vars.partition }}2"]
   # NixOS Here
   # ==========
   # Should use the most recent NixOS ISO image to do a fresh install.
+  # And the `nixos-generate-config` should be used within Live CD.
   - action: command.run
+    where: "!vars.root.is_empty"
     command: nixos-generate-config
-    variants:
-      - where: '!vars.root.is_empty'
-        command: nixos-generate-config
-        args: [--root, "{{ vars.root }}"]
+    args: [--root, "{{ vars.root }}"]
   - action: file.copy
     from: configuration.nix
     owned_by_group: root
     owned_by_user: root
     template: true
-    to: '{{ vars.root }}/etc/nixos/configuration.nix'
+    to: "{{ vars.root }}/etc/nixos/configuration.nix"
   - action: directory.copy
     from: snippet
     to: "{{ vars.root }}/etc/nixos"
@@ -93,7 +92,7 @@ actions:
       - [--add, "https://channels.nixos.org/nixos-{{ vars.channel }}", nixos]
       - [--update]
     variants:
-      - where: '!vars.root.is_empty'
+      - where: "!vars.root.is_empty"
         command: nixos-install
         args: [--root, "{{ vars.root }}", --channel, "https://channels.nixos.org/nixos-{{ vars.channel }}"]
   - action: command.run
