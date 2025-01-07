@@ -1,3 +1,4 @@
+# 1st stage: prepare dish + initial configuration
 actions:
   # Partition Disk
   # ==============

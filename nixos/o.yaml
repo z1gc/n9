@@ -1,0 +1,3 @@
+# 4th stage: Post installation stage, currently unused
+depends:
+  - nixos.x

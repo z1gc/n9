@@ -1,0 +1,4 @@
+# 2nd stage: device setup, secret setup, and more
+# (dev.machine should depends on nix.i)
+depends:
+  - "dev.{{ vars.machine }}"

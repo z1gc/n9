@@ -1,0 +1,8 @@
+# This isn't a stage, it's -1 :)
+# Only for loading the secrets at the startup.
+where: "!vars.secret.is_empty"
+
+actions:
+  - action: git.clone
+    repo_url: git@github.com:z1gc/asterisk.git
+    directory: "{{ manifest.root_dir }}/../asterisk"

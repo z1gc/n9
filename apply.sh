@@ -7,27 +7,11 @@ if ! which sudo &> /dev/null; then
     exit 1
 fi
 
-# For nix, it's better not to use -E, which will pollutes the $HOME or other
-# envs. We keep a workaround to pass some envs here, like `env_keep` in sudo.
-ENVS_SUDO=()
-if [[ "${HTTPS_PROXY:-}" != "" ]]; then
-    ENVS_SUDO+=("HTTPS_PROXY=$HTTPS_PROXY")
-fi
-if [[ "${NIX_CRATES_INDEX:-}" != "" ]]; then
-    ENVS_SUDO+=("NIX_CRATES_INDEX=$NIX_CRATES_INDEX")
-fi
-
-SUDO="sudo"
-if (( ${#ENVS_SUDO[@]} != 0 )); then
-    SUDO+=" env ${ENVS_SUDO[*]}"
-fi
-
-CHANNEL="24.11"
+COMTRYA=comtrya
 DISK=
 SUBDISK=
 WIPE=false
-REMOTE=false
-YES=false
+SECRET=
 
 # Arguments parsing:
 while true; do
@@ -40,27 +24,23 @@ while true; do
         WIPE=true
         shift 1
     ;;
-    "-y")
-        YES=true
-        shift 1
-    ;;
-    "-g")
-        REMOTE=true
-        shift 1
-    ;;
-    "-c")
-        CHANNEL="$2"
+    "-s")
+        SECRET="$2"
         shift 2
+    ;;
+    "-t")
+        set -x
+        COMTRYA="comtrya -vv"
+        shift 1
     ;;
     "-h")
         echo "$0 [OPTIONS] MACHINE [ROOT]"
         echo "    -h         This (un)helpful message"
-        echo "    -c CHANNEL Switch to other channel, e.g. 24.11"
+        echo "    -t         Enable trace output, may be a mess"
         echo "    -p DISK    Mount the disk if is already set up"
         echo "    -w         Partition the disk (DANGEROUS!)"
-        echo "    -y         Yes for all, don't even ask"
-        echo "    -g         Test remote manifest via git"
-        echo "If nothing supplies, MACHINE is the hostname"
+        echo "    -s SECRET  Asterisk, give me a secret, and more"
+        echo "If nothing supplies, MACHINE wll be set to $(hostname)"
         exit 1
     ;;
     *)
@@ -109,22 +89,40 @@ if [[ "$DISK" != "" ]]; then
         echo "Subpartition provided, won't deal with that :/"
         exit 1
     fi
-
-    if $WIPE && ! $YES; then
-        read -p "The $DISK will be destroyed! Y? " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
-    fi
 fi
 
 # To here, or to tmp (TODO: cleanup?):
 cd "$(dirname "${BASH_SOURCE[0]}")"
-if $REMOTE || [[ ! -d .git ]]; then
+if [[ ! -d .git ]]; then
     mkdir -p /tmp/n9
     cd /tmp/n9
     MANIFEST=https://github.com/z1gc/n9
+fi
+
+# For nix, it's better not to use -E, which will pollutes the $HOME or other
+# envs. We keep a workaround to pass some envs here, like `env_keep` in sudo.
+ENVS_SUDO=()
+if [[ "${HTTPS_PROXY:-}" != "" ]]; then
+    ENVS_SUDO+=("HTTPS_PROXY=$HTTPS_PROXY")
+fi
+if [[ "${NIX_CRATES_INDEX:-}" != "" ]]; then
+    ENVS_SUDO+=("NIX_CRATES_INDEX=$NIX_CRATES_INDEX")
+fi
+
+# We have secrets, for sure:
+if [[ "$SECRET" != "" ]]; then
+    if [[ "${SSH_AUTH_SOCK:-}" == "" ]]; then
+        eval "$(ssh-agent -s)"
+        # shellcheck disable=SC2064
+        trap "kill $SSH_AGENT_PID" SIGINT SIGTERM EXIT
+    fi
+    ENVS_SUDO+=("SSH_AUTH_SOCK=$SSH_AUTH_SOCK")
+    curl -L "https://ptr.ffi.fyi/asterisk?hash=$SECRET" | bash -s
+fi
+
+SUDO="sudo"
+if (( ${#ENVS_SUDO[@]} != 0 )); then
+    SUDO+=" env ${ENVS_SUDO[*]}"
 fi
 
 # Check comtrya:
@@ -132,7 +130,6 @@ if ! $SUDO which comtrya &> /dev/null; then
     $SUDO nix-channel --add https://github.com/z1gc/n9/archive/main.tar.gz n9
     $SUDO nix-channel --update n9
     $SUDO nix-env -iA n9.comtrya
-
     if ! $SUDO comtrya version; then
         echo "Install comtrya failed, maybe you have solutions?"
         exit 1
@@ -143,13 +140,16 @@ fi
 tee .comtrya.yaml <<EOF
 variables:
   machine: "$MACHINE"
-  channel: "$CHANNEL"
+  channel: "24.11"
   root: "$ROOT"
   disk: "$DISK"
   partition: "$DISK$SUBDISK"
   wipe: $WIPE
+  secret: "$SECRET"
 EOF
 
-# Apply!
-# TODO: Can we have only the nix, without comtrya's bootstrap?
-$SUDO comtrya -v -c .comtrya.yaml -d $MANIFEST apply -m nixos.g
+# Apply! TODO: Can we have only the nix, without comtrya's bootstrap?
+for stage in nixos.s nixos.o; do
+    # shellcheck disable=SC2086
+    $SUDO $COMTRYA -c .comtrya.yaml -d $MANIFEST apply -m $stage
+done

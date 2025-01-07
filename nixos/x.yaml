@@ -1,5 +1,6 @@
+# 3rd stage: System installation
 depends:
-  - "dev.{{ vars.machine }}"
+  - nixos.i
 
 actions:
   # Last Step Ride
