@@ -1,3 +1,4 @@
-# 4th stage: Post installation stage, currently unused
+# 4th stage: Post installation stage
 depends:
   - nixos.x
+  - asterisk.post

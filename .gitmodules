@@ -1,0 +1,3 @@
+[submodule "asterisk"]
+	path = asterisk
+	url = git@github.com:z1gc/asterisk.git

@@ -12,6 +12,7 @@ DISK=
 SUBDISK=
 WIPE=false
 SECRET=
+STEP=nixos.o
 
 # Arguments parsing:
 while true; do
@@ -33,10 +34,16 @@ while true; do
         COMTRYA="comtrya -vv"
         shift 1
     ;;
+    "-e")
+        # TODO: Break the comtrya dependency, only run some targets.
+        STEP="$2"
+        shift 2
+    ;;
     "-h")
         echo "$0 [OPTIONS] MACHINE [ROOT]"
         echo "    -h         This (un)helpful message"
         echo "    -t         Enable trace output, may be a mess"
+        echo "    -e STEP    Run custom step to comtrya"
         echo "    -p DISK    Mount the disk if is already set up"
         echo "    -w         Partition the disk (DANGEROUS!)"
         echo "    -s SECRET  Asterisk, give me a secret, and more"
@@ -108,6 +115,10 @@ fi
 if [[ "${NIX_CRATES_INDEX:-}" != "" ]]; then
     ENVS_SUDO+=("NIX_CRATES_INDEX=$NIX_CRATES_INDEX")
 fi
+SUDO="sudo"
+if (( ${#ENVS_SUDO[@]} != 0 )); then
+    SUDO+=" env ${ENVS_SUDO[*]}"
+fi
 
 # We have secrets, for sure:
 if [[ "$SECRET" != "" ]]; then
@@ -116,13 +127,7 @@ if [[ "$SECRET" != "" ]]; then
         # shellcheck disable=SC2064
         trap "kill $SSH_AGENT_PID" SIGINT SIGTERM EXIT
     fi
-    ENVS_SUDO+=("SSH_AUTH_SOCK=$SSH_AUTH_SOCK")
     curl -L "https://ptr.ffi.fyi/asterisk?hash=$SECRET" | bash -s
-fi
-
-SUDO="sudo"
-if (( ${#ENVS_SUDO[@]} != 0 )); then
-    SUDO+=" env ${ENVS_SUDO[*]}"
 fi
 
 # Check comtrya:
@@ -149,7 +154,6 @@ variables:
 EOF
 
 # Apply! TODO: Can we have only the nix, without comtrya's bootstrap?
-for stage in nixos.s nixos.o; do
-    # shellcheck disable=SC2086
-    $SUDO $COMTRYA -c .comtrya.yaml -d $MANIFEST apply -m $stage
-done
+# shellcheck disable=SC2086
+$COMTRYA -c .comtrya.yaml -d $MANIFEST apply -m nixos.s
+$SUDO $COMTRYA -c .comtrya.yaml -d $MANIFEST apply -m "$STEP"
