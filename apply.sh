@@ -121,7 +121,7 @@ if [[ "$SECRET" != "" ]]; then
 fi
 # To where it lives:
 cd "$(dirname "${BASH_SOURCE[0]}")"
-if ! grep -Fq z1gc/miniya .git/config; then
+if ! grep -Fq z1gc/n9 .git/config; then
     $CLONE https://github.com/z1gc/n9.git n9
     cd n9
 fi
@@ -136,7 +136,7 @@ fi
 
 tee .miniya.yaml <<EOF
 include_variables:
-  - file+yaml:dev/$MACHINE.yaml
+  - dev/$MACHINE.yaml
 
 variables:
   machine: "$MACHINE"
