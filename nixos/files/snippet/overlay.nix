@@ -5,20 +5,16 @@
 # https://stackoverflow.com/a/48838322
 # https://discourse.nixos.org/t/passing-parameters-into-import/34082/2
 
-{ config, pkgs }:
+{ pkgs }:
 
 let
-  # unstable-small is updated more frequently, and is more cutting edge:
-  unstableChannel =
-    fetchTarball "https://github.com/NixOS/nixpkgs/archive/nixos-unstable-small.tar.gz";
-
   n9Channel =
     fetchTarball "https://github.com/z1gc/n9/archive/main.tar.gz";
 
   # The name of `self, super, prev` can be different, may be `final, prev, old`:
   overlay = (self: super: {
     # Rust is kind of "fancy":
-    unstable.helix = super.unstable.helix.override (prev: {
+    helix = super.helix.override (prev: {
       rustPlatform = prev.rustPlatform // {
         buildRustPackage = args: prev.rustPlatform.buildRustPackage (args // {
           patches = (prev.patches or []) ++ [
@@ -46,13 +42,7 @@ let
 in
 {
   config = {
-    packageOverrides = pkgs: {
-      unstable = import unstableChannel {
-        config = config.nixpkgs.config;
-      };
-
-      n9 = import n9Channel {};
-    };
+    packageOverrides = pkgs: { n9 = import n9Channel {}; };
   };
 
   overlays = [ overlay ];

@@ -23,5 +23,5 @@ actions:
   - action: command.run
     command: nix-channel
     xargs:
-      - [--add, "https://channels.nixos.org/nixos-{{ vars.channel }}", nixos]
+      - [--add, "https://channels.nixos.org/nixos-unstable", nixos]
       - [--update]

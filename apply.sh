@@ -72,11 +72,8 @@ if [[ "$DISK" != "" ]]; then
 
     # https://www.kernel.org/doc/html/latest/admin-guide/devices.html
     case "$MAJOR" in
-        "8")
-            # /dev/sda1
-        ;;
-        "253")
-            # /dev/vda1
+        "8"|"253")
+            # /dev/sda1 | /dev/vda1
         ;;
         "259")
             # /dev/nvme0n1p1
@@ -142,12 +139,10 @@ include_variables:
 
 variables:
   machine: "$MACHINE"
-  channel: "24.11"
   root: "$ROOT"
   disk: "$DISK"
   partition: "$DISK$SUBDISK"
   wipe: $WIPE
-  secret: "$SECRET"
 EOF
 
 # shellcheck disable=SC2086

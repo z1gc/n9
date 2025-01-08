@@ -1,5 +1,6 @@
 # 4th stage (o): install sysatem
 depends:
+  - asterisk.sharp
   - nixos.x
 
 actions:

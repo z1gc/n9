@@ -1,4 +1,4 @@
 # 5th stage (s): post installation
 depends:
+  - asterisk.caret
   - nixos.o
-  - asterisk.post

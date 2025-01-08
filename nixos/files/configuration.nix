@@ -1,12 +1,24 @@
 # Help is available in the configuration.nix(5) man page, on
 # https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
+# https://nix.dev/manual/nix/latest/language/operators
+# https://noogle.dev/f/lib/optional
 
-{ config, pkgs, lib, ... }:
+{ pkgs, lib, ... }:
 
 let
   homeManagerChannel =
     fetchTarball
-      "https://github.com/nix-community/home-manager/archive/release-{{ vars.channel }}.tar.gz";
+      "https://github.com/nix-community/home-manager/archive/master.tar.gz";
+
+  # This is a lamba, or maybe the `{ attrs }` in `{ arg }: { attrs }` is a
+  # syntax suger for lambda? It inputs arg and outputs attrs.
+  # The `{}` is a "destructor" of attrs, eq ts `let { lib, pkgs } = attrs`,
+  # which `attrs = { lib: "some_lib", pkgs: "some_pkgs" }`.
+  tryImport = attrs: nix: args:
+    if (builtins.pathExists nix) then
+      attrs // import nix args
+    else
+      {};
 in
 {
   imports =
@@ -22,7 +34,7 @@ in
   nix.settings.substituters =
     [ "https://mirror.sjtu.edu.cn/nix-channels/store" ];
 
-  nixpkgs = import ./snippet/overlay.nix { inherit config pkgs; };
+  nixpkgs = import ./snippet/overlay.nix { inherit pkgs; };
 
   environment.variables = {
     NIX_CRATES_INDEX = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/";
@@ -106,39 +118,27 @@ in
   home-manager.users = lib.genAttrs [ "{{ vars.user }}" ] (user: {
     # No need to worry, as well:
     home.stateVersion = "24.11";
-    # Snippet only takes care of the configs, not system stuff (package, default, ...),
-    # in this way we can better control the home-manager of specific machine/user.
-    # For example, if we don't want to enable fish in a router.
-    programs.fish = import ./snippet/fish.nix { inherit pkgs; } // {
-      enable = true;
-    };
-    programs.helix = import ./snippet/helix.nix {} // {
-      enable = true;
-      defaultEditor = true;
-      package = pkgs.unstable.helix;
-    };
-    programs.git = import ./snippet/git.nix {} // {
-      enable = true;
+    programs = {
+      fish = { enable = true; } // import ./snippet/fish.nix { inherit pkgs; };
+      bash = { enable = true; } // import ./snippet/bash.nix {};
+      helix = {
+        enable = true; defaultEditor = true; package = pkgs.unstable.helix;
+      } // import ./snippet/helix.nix {};
+      git = { enable = true; } // import ./snippet/git.nix {};
+      ssh = tryImport { enable = true; } ./snippet/ssh.nix {};
     };
   });
 
-  # Some programs need SUID wrappers, can be configured further or are
-  # started in user sessions.
-  # programs.mtr.enable = true;
-  # programs.gnupg.agent = {
-  #   enable = true;
-  #   enableSSHSupport = true;
-  # };
-
-  # Enable the OpenSSH daemon.
-  services.openssh.enable = true;
-  services.openssh.settings = {
-      PermitRootLogin = "yes";
-  };
-
-  # Open ports in the firewall.
-  networking.firewall.allowedTCPPorts = [ 22 ];
+  networking.firewall.allowedTCPPorts = [ ] ++
+    # {% if vars.sshd %}
+    [ 22 ]
+    # {% endif %}
+  ;
   networking.firewall.allowedUDPPorts = [ ];
+
+  # {% if vars.sshd %}
+  services.openssh.enable = true;
+  # {% endif %}
 
   # Copy the NixOS configuration file and link it from the resulting system
   # (/run/current-system/configuration.nix). This is useful in case you
