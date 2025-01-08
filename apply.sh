@@ -125,6 +125,8 @@ if ! grep -Fq z1gc/n9 .git/config; then
     $CLONE https://github.com/z1gc/n9.git n9
     cd n9
 fi
+# Try to update if needs:
+git pull --rebase --recurse-submodules
 # Reset to secure permissions:
 chmod -R g-rw,o-rw .
 
