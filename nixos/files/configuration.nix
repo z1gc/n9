@@ -23,12 +23,11 @@ in
 {
   imports =
     [
-      "${homeManagerChannel}/nixos"
-      # nixos-generate-config --show-hardware-config
       ./hardware-configuration.nix
       # {% if vars.hyperv and vars.arm64 %}
       ./kernel-harm.nix
       # {% endif %}
+      "${homeManagerChannel}/nixos"
     ];
 
   nix.settings.substituters =
@@ -66,26 +65,19 @@ in
   #   useXkbConfig = true; # use xkb.options in tty.
   # };
 
-  # Enable the X11 windowing system.
-  # services.xserver.enable = true;
+  # {% if vars.gnome %}
+  # https://wiki.nixos.org/wiki/GNOME
+  services.xserver = {
+    enable = true;
+    displayManager.gdm.enable = true;
+    desktopManager.gnome.enable = true;
+  };
 
-  # Configure keymap in X11
-  # services.xserver.xkb.layout = "us";
-  # services.xserver.xkb.options = "eurosign:e,caps:escape";
+  # https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/x11/desktop-managers/gnome.md
+  services.gnome.core-utilities.enable = false;
 
-  # Enable CUPS to print documents.
-  # services.printing.enable = true;
-
-  # Enable sound.
-  # hardware.pulseaudio.enable = true;
-  # OR
-  # services.pipewire = {
-  #   enable = true;
-  #   pulse.enable = true;
-  # };
-
-  # Enable touchpad support (enabled default in most desktopManager).
-  # services.libinput.enable = true;
+  # TODO: Plugins & Dconf
+  # {% endif %}
 
   # genAttrs [ "ffi" ] (what: { fyi = "ptr" };)
   # => ffi.fyi = "ptr"
@@ -144,8 +136,7 @@ in
   # {% endif %}
 
   # Copy the NixOS configuration file and link it from the resulting system
-  # (/run/current-system/configuration.nix). This is useful in case you
-  # accidentally delete configuration.nix.
+  # (/run/current-system/configuration.nix):
   system.copySystemConfiguration = true;
 
   # No need to worry:
