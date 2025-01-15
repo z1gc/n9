@@ -14,8 +14,7 @@ let
     let
       version = "6.6.36.6";
       branch = lib.versions.majorMinor version;
-    in { buildLinux, fetchurl, ... }@args:
-      pkgs.callPackage (buildLinux (args // {
+      package = { buildLinux, fetchurl, ...}@args: buildLinux (args // {
         inherit version;
         modDirVersion = version;
 
@@ -43,7 +42,8 @@ let
         extraMeta = {
           inherit branch;
         };
-      })) {};
+      });
+    in pkgs.callPackage package {};
 in {
   nixpkgs = {
     config.allowUnfree = true;
