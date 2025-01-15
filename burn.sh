@@ -91,10 +91,10 @@ function switch() {
 }
 
 function help() {
-  echo "$0 [OPTIONS] HOSTNAME"
-  echo "    -s SECRET Asterisk, give me a secret"
-  echo "    -t SSH    Remote, format as \"HOST:PORT\""
-  echo "If nothing, HOSTNAME will set to $(hostname)"
+  echo "$0 setup|switch [OPTIONS] HOSTNAME"
+  echo "    -s SECRET    Asterisk, give me a secret"
+  echo "    -t HOST:PORT Remote, a ssh connection"
+  echo "If nothing, HOSTNAME will set to \"$(hostname)\""
 }
 
 function main() {
@@ -124,7 +124,7 @@ function main() {
   fi
 
   if [[ "$USER" != "root" ]]; then
-    exec sudo ../setup.sh "${args[@]}" -n
+    exec sudo ../burn.sh -n "${args[@]}"
   fi
 
   $op "${ssh:-}" "${port:-}" "${1:-"$(hostname)"}"

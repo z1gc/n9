@@ -3,12 +3,12 @@
 
 {
   # Required:
-  hostid = "2bff42a7";
-  disk.first = "/dev/nvme0n1";
+  hostid = "2bff42a8";
+  disk.first = "/dev/sda";
   user = { name = "byte"; uid = 1000; };
   group = { name = "byte"; gid = 1000; };
 
   # Optional:
-  zfs = true;
+  hyperv = true;
   gnome = true;
 }

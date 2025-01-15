@@ -39,14 +39,6 @@
           ./${hostname}/hardware-configuration.nix
           ./overlay.nix
           home-manager.nixosModules.home-manager
-          # TODO: Cleanup the code, just for a note here.
-          # { home-manager.extraSpecialArgs = specialArgs; }
-          # ({ pkgs, ... }@args: # without @ pattern it will throw an error, why?
-          #   # https://ayats.org/blog/dont-use-import
-          #   let
-          #     subconf = { inherit hostname; } //
-          #       (import ./${hostname}/configuration.nix args);
-          #   in import ./configuration.nix (args // { inherit subconf; }))
           ./configuration.nix
         ];
       });

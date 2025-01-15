@@ -1,8 +1,10 @@
 # AttrSet of system.
-{ subconf, pkgs, lib, ... }:
+{ nixpkgs, subconf, pkgs, lib, ... }:
 
 let
   inherit (lib) optionals;
+  arm64 = nixpkgs.hostPlatform == "aarch64-linux";
+  hyperv = subconf.hyperv or false;
   gnome = subconf.gnome or false;
 in {
   imports = [
@@ -85,4 +87,12 @@ in {
 
   # TODO: system.copySystemConfiguration = true; Flake doesn't support it.
   system.stateVersion = "24.11";
+} // lib.optionalAttrs (arm64 && hyperv) {
+  # Hyper-V and ARM64
+  boot.kernelPackages = pkgs.wsl2Kernel;
+
+  virtualisation.hypervGuest = {
+    enable = true;
+    videoMode = "1280x720";
+  };
 }
