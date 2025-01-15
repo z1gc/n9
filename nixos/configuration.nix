@@ -5,7 +5,6 @@
 { subconf, pkgs, lib, ... }:
 
 let
-  inherit (lib) optionals;
   arm64 = subconf.system == "aarch64-linux";
   hyperv = subconf.hyperv or false;
   gnome = subconf.gnome or false;
@@ -29,9 +28,6 @@ in lib.recursiveUpdate {
     firewall.allowedUDPPorts = [ ];
   };
 
-  time.timeZone = "Asia/Shanghai";
-  i18n.defaultLocale = "zh_CN.UTF-8";
-
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" ];
     substituters = [ "https://mirrors.ustc.edu.cn/nix-channels/store" ];
@@ -44,15 +40,29 @@ in lib.recursiveUpdate {
       NIXOS_OZONE_WL = "1";
     };
 
-    # For basically the user root and the desktop, won't use it much:
+    # For basically the other user and the desktop, don't use it too much:
     systemPackages = with pkgs; [
       git
-      ptyxis
       helix
+    ] ++ lib.optionals gnome [
+      brave
+      ptyxis
     ];
 
     # Why not in services?
     gnome.excludePackages = [ pkgs.gnome-tour ];
+  };
+
+  time.timeZone = "Asia/Shanghai";
+  i18n = {
+    defaultLocale = "zh_CN.UTF-8";
+
+    # TODO: Rime-ice?
+    inputMethod = lib.optionalAttrs gnome {
+      enable = true;
+      type = "ibus";
+      ibus.engine = with pkgs.ibus-ibus-engines; [ rime ];
+    };
   };
 
   services = {
@@ -72,7 +82,7 @@ in lib.recursiveUpdate {
     gnome.core-utilities.enable = false;
   };
 
-  fonts.packages = with pkgs; optionals gnome [
+  fonts.packages = with pkgs; lib.optionals gnome [
     noto-fonts
     noto-fonts-cjk-sans
     noto-fonts-cjk-serif

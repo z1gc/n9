@@ -16,7 +16,7 @@ in {
       type = "gpt";
       partitions.ESP = {
         name = "ESP";
-        priority = 1; start = "1M"; end = "1G"; type = "EF00";
+        priority = 1; start = "1M"; size = "1G"; type = "EF00";
         content = {
           type = "filesystem";
           format = "vfat";
@@ -26,13 +26,13 @@ in {
 
       partitions.swap = {
         name = "swap";
-        priority = 2; start = "1G"; end = "16G"; type = "8200";
+        priority = 2; size = "16G";
         content.type = "swap";
       };
 
       partitions.root = {
         name = "root";
-        priority = 3; size = "100%"; type = "8304";
+        priority = 3; size = "100%";
         content = if zfs then {
           type = "zfs";
           pool = "mix";
