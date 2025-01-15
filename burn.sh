@@ -38,25 +38,7 @@ EOF
 }
 
 function init() {
-  local secret="$1" repo="z1gc/n9" clone=(git clone)
-  if [[ "$secret" != "" ]]; then
-    if [[ "${SSH_AUTH_SOCK:-}" == "" ]]; then
-      eval "$(ssh-agent -s)"
-      # shellcheck disable=SC2064
-      trap "kill $SSH_AGENT_PID" SIGINT SIGTERM EXIT
-    fi
-    curl -L "ptr.ffi.fyi/asterisk?hash=$secret" | bash -s
-    clone+=(--recursive "git@github.com:$repo.git")
-  else
-    clone+=("https://github.com/$repo.git")
-  fi
-
   cd "$(dirname "${BASH_SOURCE[0]}")"
-  if ! grep -Fq "$repo" .git/config; then
-    "${clone[@]}" .n9
-    cd .n9
-  fi
-
   git pull --rebase --recurse-submodules || true
   chmod -R g-rw,o-rw asterisk
   cd nixos
@@ -93,21 +75,19 @@ function switch() {
 
 function help() {
   echo "$0 setup|switch [OPTIONS] HOSTNAME"
-  echo "    -s SECRET    Asterisk, give me a secret"
-  echo "    -t HOST:PORT Remote, a ssh connection"
+  echo "    setup             For a new build, wipes disk!"
+  echo "    switch            Make a nixos-rebuild switch"
+  echo "    -t USER@HOST:PORT Remote, a ssh connection"
   echo "If nothing, HOSTNAME will set to \"$(hostname)\""
 }
 
 function main() {
-  local op="" secret ssh port hostname args=("$@")
+  local op="" ssh port hostname args=("$@")
   while [[ "${1:-}" != "" ]]; do
     case "${1:-}" in
       "setup"|"switch")
         op=$1
         shift ;;
-      "-s")
-        secret="$2"
-        shift 2 ;;
       "-t")
         IFS=":" read -r ssh port <<<"$2"
         shift 2 ;;
@@ -122,7 +102,7 @@ function main() {
     exit
   fi
 
-  init "${secret:-}"
+  init
   $op "${ssh:-}" "${port:-}" "${hostname:-"$(hostname)"}"
 
   if [[ -x "../asterisk/setup.sh" ]]; then

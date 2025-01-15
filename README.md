@@ -9,15 +9,17 @@ N9 is abbr of N-IX, so freaking bad joke.
 Setup with [nixos-anywhere](https://github.com/nix-community/nixos-anywhere),
 try to keep everything in one place.
 
-For setting things up:
+For setting things up, you need to run a machine which has nix installed:
 
 ```bash
-# evil is one of my host. warning: it wipes disk
-sudo passwd
-curl -L ptr.ffi.fyi/n9 | bash -s -- setup -t root@localhost evil
+# warning: it wipes disk
+./burn.sh setup -t root@172.20.48.127 harm
 
-# rebuild and switch
+# rebuild and switch:
 ./burn.sh switch
+
+# or switch a remote machine:
+./burn.sh switch -t byte@172.20.48.254 evil
 ```
 
 For path structure:
