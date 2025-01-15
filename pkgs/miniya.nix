@@ -1,5 +1,6 @@
 # refs:
 # https://github.com/NixOS/nixpkgs/blob/master/pkgs/build-support/rust/fetch-cargo-tarball/default.nix
+# Don't install, remains as a template.
 
 {
   lib,
