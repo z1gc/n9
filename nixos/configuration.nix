@@ -1,57 +1,14 @@
-# AttrSet of system:
+# AttrSet of system.
+{ subconf, pkgs, lib, ... }:
 
-{ host, subconf, pkgs, ... }:
-{
-  nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
-    substituters = [ "https://mirrors.ustc.edu.cn/nix-channels/store" ];
-  };
-
-  # TODO: system.copySystemConfiguration = true;
-  system.stateVersion = "24.11";
-
-  # https://github.com/nix-community/disko/tree/master/example
-  disko.devices = {
-    disk.first = {
-      type = "disk";
-      device = subconf.disk.first;
-      content = {
-        type = "gpt";
-        partitions.ESP = {
-          name = "ESP";
-          priority = 1; start = "1M"; end = "1G"; type = "EF00";
-          content = {
-            type = "filesystem";
-            format = "vfat";
-            mountpoint = "/efi"; mountOptions = [ "umask=0077" ];
-          };
-        };
-        partitions.swap = {
-          name = "swap";
-          priority = 2; start = "1G"; end = "16G"; type = "8200";
-          content.type = "swap";
-        };
-        partitions.root = {
-          name = "root";
-          priority = 3; size = "100%"; type = "8304";
-          content = {
-            type = "btrfs";
-            extraArgs = [ "-f" ];
-            subvolumes."/@root" = {
-              mountpoint = "/"; mountOptions = [ "compress=zstd" ];
-            };
-            subvolumes."/@home" = {
-              mountpoint = "/home"; mountOptions = [ "compress=zstd" ];
-            };
-            subvolumes."/@nix" = {
-              mountpoint = "/nix";
-              mountOptions = [ "compress=zstd" "noatime" ];
-            };
-          };
-        };
-      };
-    };
-  };
+let
+  inherit (lib) optionals;
+  gnome = subconf.gnome or false;
+in {
+  imports = [
+    ./disko.nix
+    ./home.nix
+  ];
 
   boot.loader = {
     systemd-boot.enable = true;
@@ -60,7 +17,8 @@
   };
 
   networking = {
-    hostName = host;
+    hostName = subconf.hostname;
+    hostId = subconf.hostid;
     networkmanager.enable = true;
     firewall.allowedTCPPorts = [ 22 ];
     firewall.allowedUDPPorts = [ ];
@@ -69,24 +27,62 @@
   time.timeZone = "Asia/Shanghai";
   i18n.defaultLocale = "zh_CN.UTF-8";
 
-  users.groups."${subconf.group.name}".gid = subconf.group.gid;
-  users.users."${subconf.user.name}" = {
-    isNormalUser = true;
-    uid = subconf.user.uid;
-    group = subconf.group.name;
-    extraGroups = [ "wheel" ];
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    substituters = [ "https://mirrors.ustc.edu.cn/nix-channels/store" ];
   };
 
   environment = {
+    # vs. variables?
+    sessionVariables = {
+      NIX_CRATES_INDEX = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/";
+      NIXOS_OZONE_WL = "1";
+    };
+
+    # For basically the user root and the desktop, won't use it much:
     systemPackages = with pkgs; [
       git
+      ptyxis
       helix
-      nixd
     ];
+
+    # Why not in services?
+    gnome.excludePackages = [ pkgs.gnome-tour ];
   };
 
-  services.openssh = {
-    enable = true;
-    ports = [ 22 ];
+  services = {
+    openssh = {
+      enable = true;
+      ports = [ 22 ];
+    };
+
+    xserver = {
+      enable = gnome;
+      displayManager.gdm.enable = gnome;
+      desktopManager.gnome.enable = gnome;
+      excludePackages = [ pkgs.xterm ];
+    };
+
+    # https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/x11/desktop-managers/gnome.md
+    gnome.core-utilities.enable = false;
   };
+
+  fonts.packages = with pkgs; optionals gnome [
+    noto-fonts
+    noto-fonts-cjk-sans
+    noto-fonts-cjk-serif
+    noto-fonts-emoji
+    sarasa-gothic
+  ];
+
+  virtualisation = {
+    containers.enable = true;
+    podman = {
+      enable = true;
+      defaultNetwork.settings.dns_enabled = true;
+    };
+  };
+
+  # TODO: system.copySystemConfiguration = true; Flake doesn't support it.
+  system.stateVersion = "24.11";
 }

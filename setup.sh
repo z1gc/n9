@@ -37,40 +37,47 @@ EOF
 }
 
 function init() {
-  local secret="$1" clone=(git clone)
+  local secret="$1" repo="z1gc/n9" clone=(git clone)
   if [[ "$secret" != "" ]]; then
-      if [[ "${SSH_AUTH_SOCK:-}" == "" ]]; then
-          eval "$(ssh-agent -s)"
-          # shellcheck disable=SC2064
-          trap "kill $SSH_AGENT_PID" SIGINT SIGTERM EXIT
-      fi
-      curl -L "ptr.ffi.fyi/asterisk?hash=$secret" | bash -s
-      clone+=(--recursive)
+    if [[ "${SSH_AUTH_SOCK:-}" == "" ]]; then
+      eval "$(ssh-agent -s)"
+      # shellcheck disable=SC2064
+      trap "kill $SSH_AGENT_PID" SIGINT SIGTERM EXIT
+    fi
+    curl -L "ptr.ffi.fyi/asterisk?hash=$secret" | bash -s
+    clone+=(--recursive "git@github.com:$repo.git")
+  else
+    clone+=("https://github.com/$repo.git")
   fi
 
   cd "$(dirname "${BASH_SOURCE[0]}")"
-  if ! grep -Fq z1gc/n9 .git/config; then
-      "${clone[@]}" "https://github.com/z1gc/n9.git" .n9
-      cd .n9
+  if ! grep -Fq "$repo" .git/config; then
+    "${clone[@]}" .n9
+    cd .n9
   fi
 
   git pull --rebase --recurse-submodules || true
   chmod -R g-rw,o-rw asterisk
-  cd nixos
+  pushd nixos 1> /dev/null
+}
+
+function deinit() {
+  popd 1> /dev/null
 }
 
 function setup() {
   local ssh="$1" port="$2" hostname="$3" args=()
 
-  if [[ "$ssh" != "" ]]; then
-    args+=(--target-host "$ssh")
-    if [[ "$port" != "" ]]; then
-      args+=(--ssh-port "$port")
-    fi
+  if [[ "$ssh" == "" ]]; then
+    exit 1
+  elif [[ "$port" != "" ]]; then
+    args+=(--ssh-port "$port")
   fi
 
+  # TODO: Setup own private key?
   nixos-hardware "$ssh" "$port" "$hostname"
-  nixos-anywhere --flake ".#$hostname" "${args[@]}"
+  nixos-anywhere --flake ".#$hostname" "${args[@]}" \
+    --phases kexec,disko,install "$ssh"
 }
 
 function switch() {
@@ -87,8 +94,17 @@ function switch() {
   nixos-rebuild switch --flake ".#$hostname" "${args[@]}"
 }
 
+function help() {
+  echo "$0 [OPTIONS] HOSTNAME"
+  echo "    -h        This (un)helpful message"
+  echo "    -s SECRET Asterisk, give me a secret"
+  echo "    -t SSH    Remote, format as \"HOST:PORT\""
+  echo "If nothing, HOSTNAME will set to $(hostname)"
+  exit
+}
+
 function main() {
-  local op=exit secret ssh port
+  local op=help secret ssh port args=("$@")
   case "${1:-}" in
     "setup"|"switch")
       op=$1
@@ -100,16 +116,16 @@ function main() {
       IFS=":" read -r ssh port <<<"$2"
       shift 2 ;;
     "-h")
-      echo "$0 [OPTIONS] HOSTNAME"
-      echo "    -h        This (un)helpful message"
-      echo "    -s SECRET Asterisk, give me a secret"
-      echo "    -t SSH    Remote, format as \"HOST:PORT\""
-      echo "If nothing, HOSTNAME will set to $(hostname)"
-      exit
+      help ;;
   esac
 
   init "${secret:-}"
   $op "${ssh:-}" "${port:-}" "${1:-"$(hostname)"}"
+  deinit
+
+  if [[ -x "asterisk/setup.sh" ]]; then
+    asterisk/setup.sh "${args[@]}"
+  fi
 }
 
 main "$@"
