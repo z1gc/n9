@@ -10,7 +10,6 @@ let
   gnome = subconf.gnome or false;
 in lib.recursiveUpdate {
   imports = [
-    ./overlay.nix
     ./disko.nix
     ./home.nix
   ];
@@ -63,7 +62,10 @@ in lib.recursiveUpdate {
     inputMethod = lib.optionalAttrs gnome {
       enable = true;
       type = "ibus";
-      ibus.engines = with pkgs.ibus-engines; [ rime ];
+      ibus.engines = with pkgs.ibus-engines; [
+        rime
+        libpinyin
+      ];
     };
   };
 
@@ -105,7 +107,7 @@ in lib.recursiveUpdate {
 }
 
 (lib.optionalAttrs (arm64 && hyperv) {
-  boot.kernelPackages = pkgs.wsl2Kernel;
+  boot.kernelPackages = pkgs.linuxKernelWSL2;
 
   virtualisation.hypervGuest = {
     enable = true;

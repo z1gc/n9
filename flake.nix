@@ -50,6 +50,7 @@
             ./dev/${hostname}/hardware-configuration.nix
 
             # system
+            ./pkgs/configuration.nix
             home-manager.nixosModules.home-manager
             ./nixos/configuration.nix
           ];

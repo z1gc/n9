@@ -1,9 +1,10 @@
 HOSTNAME ?= $(shell hostname)
+HWCONF = dev/${HOSTNAME}/hardware-configuration.nix
 
-hardware: dev/${HOSTNAME}/hardware-configuration.nix
-	sudo nixos-generate-config --no-filesystems --show-hardware-config > "$<"
+${HWCONF}:
+	sudo nixos-generate-config --no-filesystems --show-hardware-config > "$@"
 
-setup: hardware
+setup: ${HWCONF}
 	grep -Eq 'VARIANT_ID="?installer"?' /etc/os-release
 	nix build --extra-experimental-features "nix-command flakes" --no-link \
 		--print-out-paths --no-write-lock-file \
@@ -13,7 +14,7 @@ setup: hardware
 		".#${HOSTNAME}"
 	if test -f asterisk/Makefile; then ${MAKE} -C asterisk setup; fi
 
-switch: hardware
+switch: ${HWCONF}
 	sudo nixos-rebuild switch --no-write-lock-file --flake ".#${HOSTNAME}"
 	sudo nix-env --delete-generations +7
 	if test -f asterisk/Makefile; then ${MAKE} -C asterisk switch; fi
