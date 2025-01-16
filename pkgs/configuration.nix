@@ -6,7 +6,7 @@
 { pkgs, ... }:
 
 let
-  linuxKernelWSL2 = pkgs.callPackage ./linuxKernelWSL2.nix {};
+  linuxKernelWSL2 = pkgs.callPackage ./linux-kernel-wsl2.nix {};
   rime-ice = pkgs.callPackage ./rime-ice.nix {};
 
   mkPatches = patches: prev: {
