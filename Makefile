@@ -1,7 +1,9 @@
 HOSTNAME ?= $(shell hostname)
 
-$(shell git pull --rebase --recurse-submodules)
-$(shell chmod -R g-rw,o-rw asterisk)
+# The make will treat the result/outpu of `$(shell)` as a receipt, therefore
+# we need to clear out the stdout.
+$(shell git pull --rebase --recurse-submodules 1>&2)
+$(shell chmod -R g-rw,o-rw asterisk 1>&2)
 
 # Main here:
 HWCONF = dev/${HOSTNAME}/hardware-configuration.nix
