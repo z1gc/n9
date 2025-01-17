@@ -9,4 +9,9 @@
 
   # Optional:
   hyperv = true;
+
+  # Toplevel:
+  toplevel = { ... }: {
+    imports = [ ./hardware-configuration.nix ];
+  };
 }

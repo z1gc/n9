@@ -10,4 +10,9 @@
   # Optional:
   zfs = true;
   gnome = true;
+
+  # Toplevel:
+  toplevel = { ... }: {
+    imports = [ ./hardware-configuration.nix ];
+  };
 }

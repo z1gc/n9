@@ -26,19 +26,20 @@
           contents = lib.attrsToList (builtins.readDir ./dev);
           dirs = builtins.filter (dir: dir.value == "directory") contents;
         in builtins.map (dir: dir.name) dirs;
-
-      asterisk = lib.pathIsRegularFile ./asterisk/configuration.nix;
     in {
       nixosConfigurations = lib.genAttrs hosts (hostname:
         let
-          defconf = {
+          subconf = {
+            # Default values, can be overriden:
             inherit hostname;
             user = { name = "byte"; uid = 1000; };
             group = { name = "byte"; gid = 1000; };
-          };
+          } // (import ./dev/${hostname});
 
-          # Can be overrided by host's configuration.nix:
-          subconf = defconf // (import ./dev/${hostname}/configuration.nix);
+          asterisk =
+            let
+              conf = ./asterisk/${hostname};
+            in lib.optionals (lib.pathIsRegularFile conf) [ conf ];
         in lib.nixosSystem {
           system = subconf.system;
 
@@ -47,18 +48,15 @@
 
           # @see nixpkgs/flake.nix::nixosSystem
           modules = [
-            # hardware
+            # thirdparty:
+            ./pkgs
             disko.nixosModules.disko
-            ./dev/${hostname}/hardware-configuration.nix
-
-            # system
-            ./pkgs/configuration.nix
             home-manager.nixosModules.home-manager
-            ./nixos/configuration.nix
-          ] ++ lib.optionals asterisk [
-            # asterisk
-            ./asterisk/configuration.nix
-          ];
+
+            # configuration:
+            ./nixos
+            subconf.toplevel
+          ] ++ asterisk;
         });
     };
 }
