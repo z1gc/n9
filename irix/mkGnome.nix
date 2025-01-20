@@ -67,7 +67,7 @@
         })).override (prev: {
           # For flake, it make's the flake directory root, therefore we can't
           # access any parent files, so we can only place the pkgs to here.
-          rimeDataPkgs = [ (pkgs.callPackage ./pkgs/rime-ice.nix {}) ];
+          rimeDataPkgs = [ (pkgs.callPackage ./pkgsRimeIce.nix {}) ];
         });
       };
 

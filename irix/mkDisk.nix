@@ -4,7 +4,7 @@
 # isn't exist in the hardware-configuration.nix.
 # @input disk.type: The main disk type, BTRFS or ZFS.
 # @input disk.device: The main disk in /dev/XXX.
-{ type, device }:  # <- Module arguments
+{ type ? "btrfs", device }:  # <- Module arguments
 
 { lib, ... }:  # <- Nix `imports = []`
 let

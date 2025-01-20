@@ -9,6 +9,7 @@ args: { user }:  # <- Module arguments
 {
   home-manager.users.${user} = {
     home.packages = with pkgs; [
+      nixd
       clang-tools
       bash-language-server
       shellcheck
