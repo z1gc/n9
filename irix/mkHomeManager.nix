@@ -18,9 +18,13 @@
 
 { ... }:
 let
+  tryImport = mod: (if builtins.typeOf mod == "string"
+    then (import mod)
+    else mod) { inherit user; };
+
   imports = [
     home-manager.nixosModules.home-manager
-  ] ++ (map (mod: mod { inherit user; }) modules);
+  ] ++ (map tryImport modules);
 in {
   inherit imports;
 

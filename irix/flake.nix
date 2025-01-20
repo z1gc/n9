@@ -2,16 +2,17 @@
 # Devices should rely on this for modular.
 # TODO: Mo(re)dules, when more devices.
 
-let
-  inputFollow = url: {
-    inherit url;
-    inputs.nixpkgs.follows = "nixpkgs";
-  };
-in {
+{
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    disko = inputFollow "github:nix-community/disko";
-    home-manager = inputFollow "github:nix-community/home-manager";
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = { ... }@args: {
