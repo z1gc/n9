@@ -22,7 +22,6 @@ setup: ${HWCONF}
 		"${FLAKE}#${HOSTNAME}"
 	if test -f asterisk/Makefile; then ${MAKE} -C asterisk setup; fi
 
-# If within the installer, hmmm, that may be fine, or you may simply OOM.
 switch: ${HWCONF}
 	sudo find . -name flake.lock -exec rm -f {} \;
 	sudo nixos-rebuild switch --show-trace --flake "${FLAKE}#${HOSTNAME}"

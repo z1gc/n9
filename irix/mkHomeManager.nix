@@ -1,4 +1,4 @@
-{ home-manager, ... }:
+{ home-manager, sops-nix, ... }:
 
 # Making a Home Manager things.
 # @input home.user: The username managed by home-manager, will be created.
@@ -7,6 +7,7 @@
 # @input home.gid: The main GID of this user, blank for same as the UID.
 # @input packages: Passthru to home-manager.users.${user}.home.packages.
 # @input modules: Imports from.
+# TODO: For multi-user, this will fail...
 {
   user,
   group ? user,
@@ -41,9 +42,15 @@ in {
     };
   };
 
+  # Just a marker for asterisk to nix eval, FIXME: too tricky!
+  passthru = { inherit user; };
+
   home-manager = {
     useUserPackages = true;
     useGlobalPkgs = true;
+    sharedModules = [
+      sops-nix.homeManagerModules.sops
+    ];
 
     users.${user}.home = {
       inherit packages;

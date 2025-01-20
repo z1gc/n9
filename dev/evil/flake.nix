@@ -28,7 +28,7 @@
           modules = with n9.lib.home-modules; [
             (mkHelix {})
             (mkFish {})
-            (builtins.toPath "${asterisk.lib.self}/dev/${hostName}")
+            (asterisk.lib.mkAsterisk { inherit hostName; })
           ];
         } args)
       ];
