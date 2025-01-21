@@ -2,34 +2,29 @@
   inputs.n9.url = "../../irix";
 
   outputs =
-    { n9, ... }:
-    n9.lib.mkNixosSystem ./. {
-      system = "aarch64-linux";
+    { self, n9, ... }:
+    {
+      nixosConfigurations = n9.lib.nixos self {
+        system = "aarch64-linux";
+        modules = with n9.lib.nixos-modules; [
+          ./hardware-configuration.nix
+          (
+            { pkgs, ... }:
+            {
+              boot.kernelPackages = pkgs.linuxPackagesFor (pkgs.callPackage ./linux-kernel-wsl2.nix { });
+              virtualisation.hypervGuest.videoMode = "1280x720";
+            }
+          )
+          (disk.btrfs "/dev/sda")
+        ];
+      };
 
-      modules = with n9.lib.modules; [
-        ./hardware-configuration.nix
-        (mkDisk { device = "/dev/sda"; })
-
-        (mkHomeManager {
-          user = "byte";
-
-          modules = with n9.lib.home-modules; [
-            (mkHelix { })
-            (mkFish { })
-          ];
-        })
-
-        (
-          { pkgs, ... }:
-          {
-            boot.kernelPackages = pkgs.linuxPackagesFor (pkgs.callPackage ./pkgsLinuxKernelWSL2.nix { });
-
-            virtualisation.hypervGuest = {
-              enable = true;
-              videoMode = "1280x720";
-            };
-          }
-        )
-      ];
+      homeConfigurations = n9.lib.home (n9.lib.utils.user2 "byte" ./passwd) {
+        modules = with n9.lib.home-modules; [
+          editor.helix
+          shell.fish
+          (secrets.ssh-key ./id_ed25519 "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILb5cEj9hvj32QeXnCD5za0VLz56yBP3CiA7Kgr1tV5S byte@harm")
+        ];
+      };
     };
 }
