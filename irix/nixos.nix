@@ -32,12 +32,12 @@ in
               nixpkgs.overlays = [
                 (self: super: {
                   helix = utils.mkPatch {
-                    url = "https://github.com/z1gc/helix/commit/16bff48d998d01d87f41821451b852eb2a8cf627.patch";
+                    url = "https://github.com/plxty/helix/commit/16bff48d998d01d87f41821451b852eb2a8cf627.patch";
                     hash = "sha256-JBhz0X7/cdRDZ4inasPvxs+xlktH2+cK0190PDxPygE=";
                   } super.helix pkgs;
 
                   openssh = utils.mkPatch {
-                    url = "https://github.com/z1gc/openssh-portable/commit/b3320c50cb0c74bcc7f0dade450c1660fd09b241.patch";
+                    url = "https://github.com/plxty/openssh-portable/commit/b3320c50cb0c74bcc7f0dade450c1660fd09b241.patch";
                     hash = "sha256-kiR/1Jz4h4z+fIW9ePgNjEXq0j9kHILPi9UD4JruV7M=";
                   } super.openssh pkgs;
                 })

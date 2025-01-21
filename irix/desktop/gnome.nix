@@ -63,7 +63,7 @@ in
         # We can have a override chain! Hooray!
         rime =
           (utils.mkPatch {
-            url = "https://github.com/z1gc/ibus-rime/commit/d5baa3f648b409403bff87dddaf291c937de0d33.patch";
+            url = "https://github.com/plxty/ibus-rime/commit/d5baa3f648b409403bff87dddaf291c937de0d33.patch";
             hash = "sha256-VtgBImxvrVJGEfAvEW4rFDLghNKaxPNvrTsnEwPVakE=";
           } super.ibus-engines.rime pkgs).override
             (prev: {
@@ -72,7 +72,7 @@ in
       };
 
       librime = utils.mkPatch {
-        url = "https://github.com/z1gc/librime/commit/c550986e57d82fe14166ca8169129607fa71a64f.patch";
+        url = "https://github.com/plxty/librime/commit/c550986e57d82fe14166ca8169129607fa71a64f.patch";
         hash = "sha256-9jLSf17MBg4tHQ9cPZG4SN7uD1yOdGe/zfJrXfoZneE=";
       } super.librime pkgs;
 
