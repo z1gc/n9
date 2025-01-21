@@ -1,4 +1,5 @@
 {
+  self,
   nixpkgs,
   home-manager,
   sops-nix,
@@ -14,128 +15,9 @@ that: # <- Module arguments
 
 { system, ... }@args: # <- NixOS `nixosSystem {}` (Hmm, not really)
 let
-  pkgs = nixpkgs.legacyPackages.${system};
-  lib = nixpkgs.lib;
-
+  utils = self.lib.utils;
   hostName = builtins.unsafeDiscardStringContext (builtins.baseNameOf that);
   hostId = builtins.substring 63 8 (builtins.hashString "sha512" hostName);
-
-  packer = {
-    nixpkgs.overlays = [
-      (self: super: {
-        helix = super.helix.overrideAttrs (prev: {
-          patches = (prev.patches or [ ]) ++ [
-            (pkgs.fetchpatch {
-              url = "https://github.com/z1gc/helix/commit/16bff48d998d01d87f41821451b852eb2a8cf627.patch";
-              hash = "sha256-JBhz0X7/cdRDZ4inasPvxs+xlktH2+cK0190PDxPygE=";
-            })
-          ];
-        });
-
-        openssh = super.openssh.overrideAttrs (prev: {
-          patches = (prev.patches or [ ]) ++ [
-            (pkgs.fetchpatch {
-              url = "https://github.com/z1gc/openssh-portable/commit/b3320c50cb0c74bcc7f0dade450c1660fd09b241.patch";
-              hash = "sha256-kiR/1Jz4h4z+fIW9ePgNjEXq0j9kHILPi9UD4JruV7M=";
-            })
-          ];
-        });
-      })
-    ];
-
-    nix.settings = {
-      experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
-      substituters = [ "https://mirrors.ustc.edu.cn/nix-channels/store" ];
-    };
-
-    nixpkgs.config.allowUnfree = true;
-  };
-
-  basic = {
-    boot.loader = {
-      systemd-boot.enable = true;
-      efi.canTouchEfiVariables = true;
-    };
-
-    networking = {
-      inherit hostName hostId;
-      networkmanager.enable = true;
-    };
-
-    environment = {
-      sessionVariables.NIX_CRATES_INDEX = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/";
-
-      systemPackages = with pkgs; [
-        gnumake
-        git
-        helix
-      ];
-    };
-
-    time.timeZone = "Asia/Shanghai";
-    i18n.defaultLocale = "zh_CN.UTF-8";
-
-    virtualisation = {
-      containers.enable = true;
-      podman = {
-        enable = true;
-        defaultNetwork.settings.dns_enabled = true;
-      };
-    };
-
-    system.stateVersion = "25.05";
-
-    # TODO: To other places.
-    networking = {
-      firewall.allowedTCPPorts = [ 22 ];
-      firewall.allowedUDPPorts = [ ];
-    };
-
-    services.openssh = {
-      enable = true;
-      ports = [ 22 ];
-    };
-  };
-
-  home =
-    if that ? homeConfigurations then
-      [
-        home-manager.nixosModules.home-manager
-        {
-          home-manager.useGlobalPkgs = true;
-          home-manager.useUserPackages = true;
-        }
-      ]
-      ++ (lib.mapAttrsToList (
-        user:
-        {
-          group,
-          uid,
-          gid,
-          home,
-          config,
-        }:
-        {
-          users = {
-            groups.${group} = {
-              inherit gid;
-            };
-
-            users.${user} = {
-              isNormalUser = true;
-              inherit uid group home;
-              extraGroups = [ "wheel" ];
-            };
-          };
-
-          home-manager.users.${user} = config;
-        }
-      ) that.homeConfigurations)
-    else
-      [ ];
 in
 {
   ${hostName} =
@@ -144,11 +26,131 @@ in
 
       modules =
         [
-          packer
-          basic
+          (
+            { pkgs, ... }:
+            {
+              nixpkgs.overlays = [
+                (self: super: {
+                  helix = utils.mkPatch {
+                    url = "https://github.com/z1gc/helix/commit/16bff48d998d01d87f41821451b852eb2a8cf627.patch";
+                    hash = "sha256-JBhz0X7/cdRDZ4inasPvxs+xlktH2+cK0190PDxPygE=";
+                  } super.helix pkgs;
+
+                  openssh = utils.mkPatch {
+                    url = "https://github.com/z1gc/openssh-portable/commit/b3320c50cb0c74bcc7f0dade450c1660fd09b241.patch";
+                    hash = "sha256-kiR/1Jz4h4z+fIW9ePgNjEXq0j9kHILPi9UD4JruV7M=";
+                  } super.openssh pkgs;
+                })
+              ];
+
+              nixpkgs.config.allowUnfree = true;
+
+              nix.settings = {
+                experimental-features = [
+                  "nix-command"
+                  "flakes"
+                ];
+                substituters = [ "https://mirrors.ustc.edu.cn/nix-channels/store" ];
+              };
+
+              boot.loader = {
+                systemd-boot.enable = true;
+                efi.canTouchEfiVariables = true;
+              };
+
+              networking = {
+                inherit hostName hostId;
+                networkmanager.enable = true;
+              };
+
+              environment = {
+                sessionVariables.NIX_CRATES_INDEX = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/";
+
+                systemPackages = with pkgs; [
+                  gnumake
+                  git
+                  helix
+                  age
+                  sops
+                ];
+              };
+
+              time.timeZone = "Asia/Shanghai";
+              i18n.defaultLocale = "zh_CN.UTF-8";
+
+              virtualisation = {
+                containers.enable = true;
+                podman = {
+                  enable = true;
+                  defaultNetwork.settings.dns_enabled = true;
+                };
+              };
+
+              system.stateVersion = "25.05";
+
+              # TODO: To other places.
+              networking = {
+                firewall.allowedTCPPorts = [ 22 ];
+                firewall.allowedUDPPorts = [ ];
+              };
+
+              services.openssh = {
+                enable = true;
+                ports = [ 22 ];
+              };
+            }
+          )
+
           sops-nix.nixosModules.sops
+          {
+            sops.age.keyFile = "/root/.cache/.whats-yours-is-mine";
+          }
+
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+          }
         ]
-        ++ home
+        ++ (nixpkgs.lib.optionals (that ? homeConfigurations) (
+          nixpkgs.lib.mapAttrsToList (
+            # TODO: Assert username is not root:
+            username:
+            {
+              uid,
+              home,
+              passwd,
+              config,
+            }:
+            args: {
+              sops.secrets = nixpkgs.lib.optionalAttrs (passwd != null) {
+                "login/${username}" = {
+                  # sops --age "$(awk '$2 == "public" {print $NF}' <key>)" -e <file>
+                  neededForUsers = true;
+                  format = "binary";
+                  sopsFile = passwd;
+                };
+              };
+
+              users = {
+                groups.${username} = {
+                  gid = uid;
+                };
+
+                users.${username} = {
+                  isNormalUser = true;
+                  inherit uid home;
+                  group = username;
+                  extraGroups = [ "wheel" ];
+                  hashedPasswordFile =
+                    if (passwd != null) then args.config.sops.secrets."login/${username}".path else null;
+                };
+              };
+
+              home-manager.users.${username} = config;
+            }
+          ) that.homeConfigurations
+        ))
         ++ args.modules;
     }
     // builtins.removeAttrs args [ "modules" ];

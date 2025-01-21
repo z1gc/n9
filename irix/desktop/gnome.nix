@@ -1,10 +1,12 @@
-{ ... }: # <- Flake inputs
+{ self, ... }: # <- Flake inputs
 
 # Making a GNOME Desktop.
-# Currently no arguments.
-# <- Module arguments
+# No arguments. <- Module arguments
 
 { pkgs, ... }: # <- Nix `imports = []`
+let
+  utils = self.lib.utils;
+in
 {
   services = {
     xserver = {
@@ -60,27 +62,19 @@
       ibus-engines = super.ibus-engines // {
         # We can have a override chain! Hooray!
         rime =
-          (super.ibus-engines.rime.overrideAttrs (prev: {
-            patches = (prev.patches or [ ]) ++ [
-              (pkgs.fetchpatch {
-                url = "https://github.com/z1gc/ibus-rime/commit/d5baa3f648b409403bff87dddaf291c937de0d33.patch";
-                hash = "sha256-VtgBImxvrVJGEfAvEW4rFDLghNKaxPNvrTsnEwPVakE=";
-              })
-            ];
-          })).override
+          (utils.mkPatch {
+            url = "https://github.com/z1gc/ibus-rime/commit/d5baa3f648b409403bff87dddaf291c937de0d33.patch";
+            hash = "sha256-VtgBImxvrVJGEfAvEW4rFDLghNKaxPNvrTsnEwPVakE=";
+          } super.ibus-engines.rime pkgs).override
             (prev: {
               rimeDataPkgs = [ (pkgs.callPackage ../pkgs/rime-ice.nix { }) ];
             });
       };
 
-      librime = super.librime.overrideAttrs (prev: {
-        patches = (prev.patches or [ ]) ++ [
-          (pkgs.fetchpatch {
-            url = "https://github.com/z1gc/librime/commit/c550986e57d82fe14166ca8169129607fa71a64f.patch";
-            hash = "sha256-9jLSf17MBg4tHQ9cPZG4SN7uD1yOdGe/zfJrXfoZneE=";
-          })
-        ];
-      });
+      librime = utils.mkPatch {
+        url = "https://github.com/z1gc/librime/commit/c550986e57d82fe14166ca8169129607fa71a64f.patch";
+        hash = "sha256-9jLSf17MBg4tHQ9cPZG4SN7uD1yOdGe/zfJrXfoZneE=";
+      } super.librime pkgs;
 
       brave = super.brave.override (prev: {
         commandLineArgs =

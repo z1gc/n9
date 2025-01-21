@@ -1,13 +1,13 @@
 { ... }: # <- Flake inputs
 
 # Making the Helix editor.
-# No arguments.
-# <- Module arguments
+# No arguments. <- Module arguments
 
 { pkgs, ... }: # <- Nix `imports = []`
 {
   home.packages = with pkgs; [
     nixd
+    nixfmt-rfc-style
     clang-tools
     bash-language-server
     shellcheck
@@ -140,5 +140,14 @@
         };
       };
     };
+
+    languages.language = [
+      {
+        name = "nix";
+        formatter = {
+          command = "nixfmt";
+        };
+      }
+    ];
   };
 }

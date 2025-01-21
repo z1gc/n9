@@ -42,7 +42,22 @@
       lib.home-modules = {
         editor.helix = import ./editor/helix.nix args;
         shell.fish = import ./shell/fish.nix args;
+        secret.ssh-key = import ./secret/ssh-key.nix args;
       };
-    }
-    // args;
+
+      # Simple utils, mainly for making the code "shows" better.
+      # In modules, you can refer it using `self.lib.utils`.
+      lib.utils = rec {
+        mkPatches =
+          patches: pkg: pkgs:
+          pkg.overrideAttrs (prev: {
+            patches = (prev.patches or [ ]) ++ (builtins.map pkgs.fetchpatch patches);
+          });
+
+        mkPatch = patch: mkPatches [ patch ];
+
+        # 2 for argument numbers, huh.
+        user2 = username: passwd: { inherit username passwd; };
+      };
+    };
 }

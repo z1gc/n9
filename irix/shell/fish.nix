@@ -1,8 +1,7 @@
 { ... }: # <- Flake inputs
 
 # Making the Fish shell.
-# No arguments.
-# <- Module arguments.
+# No arguments. <- Module arguments.
 
 { pkgs, ... }: # <- Nix `imports = []`
 {
