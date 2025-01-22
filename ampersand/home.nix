@@ -48,7 +48,12 @@ let
       (
         { pkgs, ... }:
         {
-          home.packages = map (attrByStrPath pkgs) packages;
+          home.packages =
+            with pkgs;
+            [
+              age
+            ]
+            ++ (map (attrByStrPath pkgs) packages);
           sops.age.keyFile = "${home}/.cache/.whats-yours-is-mine";
         }
       )

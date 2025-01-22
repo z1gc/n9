@@ -54,8 +54,6 @@ in
               systemPackages = with pkgs; [
                 gnumake
                 git
-                helix
-                age
                 sops
               ];
             };

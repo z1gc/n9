@@ -51,12 +51,12 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-2gior5OhwKjm6FovRv5Jo1skAiZqW9k4n2eIqoDi4Vw=",
-        "path": "/nix/store/hdak9qmli0x35c53piqcq3yw5bvqnzn4-source/ampersand",
+        "narHash": "sha256-uwhzVCbkHErKDsRe6sMj19GdvaeY15D6efDiVUxyiRs=",
+        "path": "/nix/store/s9j9ry209yadmwagysp69pw25bj9rhn3-source/ampersand",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/hdak9qmli0x35c53piqcq3yw5bvqnzn4-source/ampersand",
+        "path": "/nix/store/s9j9ry209yadmwagysp69pw25bj9rhn3-source/ampersand",
         "type": "path"
       }
     },
