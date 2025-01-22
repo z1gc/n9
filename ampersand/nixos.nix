@@ -1,4 +1,5 @@
 {
+  self,
   nixpkgs,
   home-manager,
   sops-nix,
@@ -8,14 +9,20 @@
 # Make NixOS, with disk, bootloader, networking, hostname, etc.
 # TODO: mkIf style configurations? It loses flexibility.
 # @input that: Flake `self` of the modules.
-# @input {modules}: To nixosSystem.
+# @input modules: To nixosSystem.
+# @input packages: Shortcut.
 # @output: AttrSet of ${hostName} of ${that}.
 that: # <- Module arguments
 
-{ modules }: # <- NixOS `nixosSystem {}` (Hmm, not really)
+{
+  modules,
+  packages ? [ ],
+}: # <- NixOS `nixosSystem {}` (Hmm, not really)
 
 let
+  inherit (self.lib) utils;
   inherit (nixpkgs) lib;
+
   hostName = builtins.unsafeDiscardStringContext (builtins.baseNameOf that);
   hostId = builtins.substring 63 8 (builtins.hashString "sha512" hostName);
   hasHome = that ? homeConfigurations;
@@ -51,11 +58,14 @@ in
             environment = {
               sessionVariables.NIX_CRATES_INDEX = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/";
 
-              systemPackages = with pkgs; [
-                gnumake
-                git
-                sops
-              ];
+              systemPackages =
+                with pkgs;
+                [
+                  gnumake
+                  git
+                  sops
+                ]
+                ++ (map (utils.attrByIfStringPath pkgs) packages);
             };
 
             time.timeZone = "Asia/Shanghai";

@@ -1,4 +1,5 @@
 {
+  self,
   nixpkgs,
   home-manager,
   sops-nix,
@@ -34,10 +35,7 @@ that:
 }:
 
 let
-  # https://www.reddit.com/r/NixOS/comments/1cnwfyi/comment/l3a38q5/
-  inherit (nixpkgs) lib;
-  attrByStrPath =
-    set: strPath: lib.attrsets.attrByPath (lib.strings.splitString "." strPath) null set;
+  inherit (self.lib) utils;
 
   isNixos = that ? nixosConfigurations;
   system = that.system;
@@ -63,7 +61,7 @@ let
               bcc
               bpftrace
             ]
-            ++ (map (attrByStrPath pkgs) packages);
+            ++ (map (utils.attrByIfStringPath pkgs) packages);
           sops.age.keyFile = "${home}/.cache/.whats-yours-is-mine";
         }
       )
@@ -78,7 +76,7 @@ let
 in
 {
   ${username} =
-    if (lib.trace "isNixos? ${lib.boolToString isNixos}" isNixos) then
+    if (nixpkgs.lib.trace "isNixos? ${nixpkgs.lib.boolToString isNixos}" isNixos) then
       {
         inherit
           uid

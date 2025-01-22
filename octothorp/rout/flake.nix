@@ -1,27 +1,63 @@
 # https://github.com/astro/nix-openwrt-imagebuilder
 # https://github.com/astro/nix-openwrt-imagebuilder/blob/main/example-x86-64.nix
 # https://downloads.openwrt.org/releases/23.05.5/targets/x86/64/profiles.json
-# nix eval --raw ".#default.configurePhase"
-# WIP
+
+# To test on my ARM64 machine, can only built remotely:
+# https://github.com/NixOS/nix/issues/2789
+# nix flake show
+# sudo nix build --builders "ssh-ng://byte@rout x86_64-linux" ".#packages.x86_64-linux.openwrt"
 
 {
-  inputs = {
-    openwrt-imagebuilder.url = "github:astro/nix-openwrt-imagebuilder";
+  inputs.n9.url = "../../ampersand";
+  inputs.openwrt-imagebuilder = {
+    url = "github:astro/nix-openwrt-imagebuilder";
+    inputs.nixpkgs.follows = "nixpkgs";
   };
+
   outputs =
-    { nixpkgs, openwrt-imagebuilder, ... }:
     {
-      # default is the build name, use `nix flake show` to know.
-      packages.x86_64-linux.default =
-        let
-          inherit (nixpkgs) lib;
-          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      self,
+      nixpkgs,
+      n9,
+      openwrt-imagebuilder,
+      ...
+    }:
+    let
+      inherit (nixpkgs) lib;
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
 
-          target = "x86";
-          variant = "64";
-          profile = "generic";
+      target = "x86";
+      variant = "64";
+      profile = "generic";
+      release = import "${openwrt-imagebuilder}/latest-release.nix";
+      image = "openwrt-${release}-${target}-${variant}-${profile}";
 
-          config = {
+      overrideConfigs =
+        prev:
+        builtins.concatStringsSep " " (
+          [
+            prev
+            "sed -i -E -e ''"
+          ]
+          ++ (builtins.map ({ name, value }: "-e 's/^(CONFIG_${name}=).+$/\\1${value}/'") (
+            lib.attrsToList {
+              TARGET_ROOTFS_SQUASHFS = "n";
+              TARGET_ROOTFS_EXT4FS = "n";
+              GRUB_IMAGES = "n";
+              GRUB_EFI_IMAGES = "n";
+            }
+          ))
+          ++ [ ".config" ]
+        );
+    in
+    {
+      inherit system;
+
+      packages.${system} = {
+        # With OpenWRT packages:
+        openwrt-image =
+          (openwrt-imagebuilder.lib.build {
             inherit
               target
               variant
@@ -29,53 +65,82 @@
               pkgs
               ;
 
-            # add package to include in the image, ie. packages that you don't
-            # want to install manually later
             # https://openwrt.org/docs/guide-user/additional-software/saving_space
-            # TODO: Remove the kmod totally? No way to remove them currently...
+            # TODO: Remove the kmod totally? It isn't much possible without
+            #       hacking the openwrt/include/kernel.mk, and it headaches.
             # TODO: Replace kmodloader to a dummpy script.
-            packages = [ "-opkg" ];
+            packages = [
+              "curl"
+              "yq"
+              "dnsmasq-full"
+              "ip-full"
+              "luci"
+              "luci-ssl"
+              "luci-app-acme"
+              "acme-acmesh-dnsapi"
+              "luci-app-statistics"
+              "collectd-mod-cpufreq"
+              "collectd-mod-load"
+              "collectd-mod-sensors"
+              "luci-app-ttyd"
 
-            disabledServices = [ "dropbear" ];
+              "-dnsmasq"
+              "-opkg"
+              "-luci-app-opkg"
+              "-dropbear"
+            ];
+            disabledServices = [ ];
+          }).overrideAttrs
+            (prev: {
+              preBuild = overrideConfigs (prev.preBuild or "");
+              preInstall = "rm bin/targets/${target}/${variant}/${image}-kernel.bin";
+              postInstall = "cp .config $out/${image}.config";
+            });
 
-            # include files in the images.
-            # to set UCI configuration, create a uci-defauts scripts as per
-            # official OpenWRT ImageBuilder recommendation.
-            files = pkgs.runCommand "image-files" { } ''
-              mkdir -p $out/etc/uci-defaults
-              cat > $out/etc/uci-defaults/99-custom <<EOF
-              uci -q batch << EOI
-              set system.@system[0].hostname='testap'
-              commit
-              EOI
-              EOF
-            '';
-          };
+        # With configurtaions "injected":
+        # openwrt = pkgs.stdenv.mkDerivation {
+        #   src = self.packages.${system}.openwrt-image + "/";
+        #   dontFixup = true;
+        # };
+      };
 
-          # TODO: new options?
-          overrides = {
-            TARGET_ROOTFS_SQUASHFS = "n";
-            TARGET_ROOTFS_EXT4FS = "n";
-            GRUB_IMAGES = "n";
-            GRUB_EFI_IMAGES = "n";
-          };
+      nixosConfigurations = n9.lib.nixos self {
+        # packages = [ self.packages.${system}.openwrt ];
 
-          package = openwrt-imagebuilder.lib.build config;
-        in
-        package.overrideAttrs (prev: {
-          preBuild = builtins.concatStringsSep " " (
-            [
-              (prev.preBuild or "")
-              "sed -i -E -e ''"
-            ]
-            ++ (builtins.map ({ name, value }: "-e 's/^(CONFIG_${name}=).+$/\\1${value}/'") (
-              lib.attrsToList overrides
-            ))
-            ++ [ ".config" ]
-          );
+        modules = with n9.lib.nixos-modules; [
+          ./hardware-configuration.nix
+          (disk.btrfs "/dev/nvme0n1")
+          {
+            boot.kernelModules = [
+              "pppoe"
+              "inet_diag"
+            ];
+            networking = {
+              useDHCP = false;
+              dhcpcd.enable = false;
+              networkmanager.enable = lib.mkForce false;
+              firewall.enable = false;
+            };
+          }
+        ];
+      };
 
-          preInstall = "rm -fv bin/targets/${target}/${variant}/*-kernel.bin";
-          postInstall = "cp .config $out/openwrt-config";
-        });
+      homeConfigurations = n9.lib.home self (n9.lib.utils.user2 "byte" ./passwd) {
+        packages = [
+          "tcpdump"
+          "bridge-utils"
+          "ethtool"
+          "nftables"
+        ];
+
+        modules = with n9.lib.home-modules; [
+          editor.helix
+          shell.fish
+          {
+            home.file.".ssh/authorized_keys" =
+              "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILb5cEj9hvj32QeXnCD5za0VLz56yBP3CiA7Kgr1tV5S byte@harm";
+          }
+        ];
+      };
     };
 }

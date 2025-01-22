@@ -19,7 +19,7 @@
   };
 
   outputs =
-    { ... }@args:
+    { nixpkgs, ... }@args:
     let
       # TODO: Modular!
       disk =
@@ -54,6 +54,14 @@
           });
 
         mkPatch = patch: mkPatches [ patch ];
+
+        # Turn "xyz" to pkgs.xyz (only if "xyz" is string) helper:
+        attrByIfStringPath =
+          set: maybeStringPath:
+          if (builtins.typeOf maybeStringPath == "string") then
+            nixpkgs.lib.attrsets.attrByPath (nixpkgs.lib.strings.splitString "." maybeStringPath) null set
+          else
+            maybeStringPath;
 
         # 2 for argument numbers, huh.
         user2 = username: passwd: { inherit username passwd; };
