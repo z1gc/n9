@@ -10,6 +10,7 @@
 }: # <- Module arguments
 
 { lib, ... }: # <- Nix `imports = []`
+
 let
   efiMount = "/efi";
 

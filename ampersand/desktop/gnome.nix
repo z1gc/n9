@@ -4,6 +4,7 @@
 # No arguments. <- Module arguments
 
 { pkgs, ... }: # <- Nix `imports = []`
+
 let
   utils = self.lib.utils;
 in
@@ -77,13 +78,11 @@ in
       } super.librime pkgs;
 
       brave = super.brave.override (prev: {
-        commandLineArgs =
+        commandLineArgs = builtins.concatStringsSep " " [
           (prev.commandLineArgs or "")
-          + " "
-          + builtins.concatStringsSep " " [
-            "--wayland-text-input-version=3"
-            "--sync-url=https://brave-sync.pteno.cn/v2"
-          ];
+          "--wayland-text-input-version=3"
+          "--sync-url=https://brave-sync.pteno.cn/v2"
+        ];
       });
     })
   ];

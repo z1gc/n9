@@ -1,5 +1,5 @@
 {
-  inputs.n9.url = "../../irix";
+  inputs.n9.url = "../../ampersand";
 
   outputs =
     { self, n9, ... }:

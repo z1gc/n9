@@ -1,5 +1,4 @@
-# Library of N9, IR(N)IX.
-# Devices should rely on this for modular.
+# Library of N9, devices should rely on this for modular.
 # TODO: Mo(re)dules, when more devices.
 
 {

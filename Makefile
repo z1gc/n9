@@ -27,7 +27,7 @@ setup: ${HWCONF}
 	if test -f asterisk/Makefile; then ${MAKE} -C asterisk setup; fi
 
 switch: ${HWCONF}
-	find . -name flake.lock -exec rm -f {} \;
+	rm -f "dev/${HOSTNAME}/flake.lock"
 	nixos-rebuild switch --show-trace --flake "${FLAKE}#${HOSTNAME}"
 	nix-env --delete-generations +7
 	if test -f asterisk/Makefile; then ${MAKE} -C asterisk switch; fi

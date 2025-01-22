@@ -4,6 +4,7 @@
 # No arguments. <- Module arguments.
 
 { pkgs, ... }: # <- Nix `imports = []`
+
 {
   home.packages = with pkgs; [
     zoxide
