@@ -4,8 +4,9 @@
   outputs =
     { self, n9, ... }:
     {
+      system = "aarch64-linux";
+
       nixosConfigurations = n9.lib.nixos self {
-        system = "aarch64-linux";
         modules = with n9.lib.nixos-modules; [
           ./hardware-configuration.nix
           (
@@ -18,7 +19,7 @@
         ];
       };
 
-      homeConfigurations = n9.lib.home (n9.lib.utils.user2 "byte" ./passwd) {
+      homeConfigurations = n9.lib.home self (n9.lib.utils.user2 "byte" ./passwd) {
         modules = with n9.lib.home-modules; [
           editor.helix
           shell.fish

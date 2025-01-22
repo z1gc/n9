@@ -1,50 +1,35 @@
 {
-  self,
   nixpkgs,
   home-manager,
   sops-nix,
   ...
-}: # <- Flake inputs
+}@args: # <- Flake inputs
 
 # Make NixOS, with disk, bootloader, networking, hostname, etc.
 # TODO: mkIf style configurations? It loses flexibility.
 # @input that: Flake `self` of the modules.
-# @input args.{system,modules}: To nixosSystem.
+# @input {modules}: To nixosSystem.
 # @output: AttrSet of ${hostName} of ${that}.
 that: # <- Module arguments
 
-{ system, modules, ... }: # <- NixOS `nixosSystem {}` (Hmm, not really)
+{ modules }: # <- NixOS `nixosSystem {}` (Hmm, not really)
 
 let
-  utils = self.lib.utils;
+  inherit (nixpkgs) lib;
   hostName = builtins.unsafeDiscardStringContext (builtins.baseNameOf that);
   hostId = builtins.substring 63 8 (builtins.hashString "sha512" hostName);
+  hasHome = that ? homeConfigurations;
 in
 {
-  ${hostName} = nixpkgs.lib.nixosSystem {
-    inherit system;
+  ${hostName} = lib.nixosSystem {
+    inherit (that) system;
 
     modules =
       [
+        (import ./nixpkgs.nix args)
         (
           { pkgs, ... }:
           {
-            nixpkgs.overlays = [
-              (self: super: {
-                helix = utils.mkPatch {
-                  url = "https://github.com/plxty/helix/commit/16bff48d998d01d87f41821451b852eb2a8cf627.patch";
-                  hash = "sha256-JBhz0X7/cdRDZ4inasPvxs+xlktH2+cK0190PDxPygE=";
-                } super.helix pkgs;
-
-                openssh = utils.mkPatch {
-                  url = "https://github.com/plxty/openssh-portable/commit/b3320c50cb0c74bcc7f0dade450c1660fd09b241.patch";
-                  hash = "sha256-kiR/1Jz4h4z+fIW9ePgNjEXq0j9kHILPi9UD4JruV7M=";
-                } super.openssh pkgs;
-              })
-            ];
-
-            nixpkgs.config.allowUnfree = true;
-
             nix.settings = {
               experimental-features = [
                 "nix-command"
@@ -112,8 +97,8 @@ in
           home-manager.useUserPackages = true;
         }
       ]
-      ++ (nixpkgs.lib.optionals (that ? homeConfigurations) (
-        nixpkgs.lib.mapAttrsToList (
+      ++ (lib.optionals (lib.trace "hasHome? ${lib.boolToString hasHome}" hasHome) (
+        lib.mapAttrsToList (
           # TODO: Assert username is not root:
           username:
           {
@@ -123,7 +108,7 @@ in
             config,
           }:
           args: {
-            sops.secrets = nixpkgs.lib.optionalAttrs (passwd != null) {
+            sops.secrets = lib.optionalAttrs (passwd != null) {
               "login/${username}" = {
                 # sops --age "$(awk '$2 == "public" {print $NF}' <key>)" -e <file>
                 neededForUsers = true;

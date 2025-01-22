@@ -4,8 +4,9 @@
   outputs =
     { self, n9, ... }:
     {
+      system = "x86_64-linux";
+
       nixosConfigurations = n9.lib.nixos self {
-        system = "x86_64-linux";
         modules = with n9.lib.nixos-modules; [
           ./hardware-configuration.nix
           (disk.zfs "/dev/nvme0n1")
@@ -13,7 +14,7 @@
         ];
       };
 
-      homeConfigurations = n9.lib.home (n9.lib.utils.user2 "byte" ./passwd) {
+      homeConfigurations = n9.lib.home self (n9.lib.utils.user2 "byte" ./passwd) {
         packages = [
           "git-repo"
           "jetbrains.clion"

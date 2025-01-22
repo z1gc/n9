@@ -1,9 +1,9 @@
 { ... }: # <- Flake inputs
 
 # Making the Helix editor.
-# No arguments. <- Module arguments
+# No arguments. <- Module arguments.
 
-{ pkgs, ... }: # <- Nix `imports = []`
+{ pkgs, ... }: # <- Home Manager `imports = []`
 
 {
   home.packages = with pkgs; [
