@@ -52,11 +52,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-dt8NFtthFRhqaeQnSU7gx8JrSyxXE+vqvRkrne6xEHs=",
-        "path": "/nix/store/fq5miaiv5dj7f5z5da7kw0aqrmnvbc9a-source/ampersand",
+        "path": "/nix/store/6w6zjkv0cjlbgp11jz1pm0s01x6823ln-source/ampersand",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/fq5miaiv5dj7f5z5da7kw0aqrmnvbc9a-source/ampersand",
+        "path": "/nix/store/6w6zjkv0cjlbgp11jz1pm0s01x6823ln-source/ampersand",
         "type": "path"
       }
     },

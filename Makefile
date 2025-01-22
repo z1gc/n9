@@ -1,15 +1,14 @@
-export HOSTNAME ?= $(shell hostname)
-
 ifneq (${USER},root)
 $(error Run as root or sudo)
 endif
 
-# The make will treat the result/outpu of `$(shell)` as a receipt, therefore
-# we need to clear out the stdout.
+export HOSTNAME ?= $(shell hostname)
+
+# The make will treat the result/outpu of `$(...)` as a receipt, therefore we
+# need to clear out the stdout.
 $(shell su $$(stat -c %U .git) -c "git pull --rebase --recurse-submodules" 1>&2)
 $(shell chmod -R g-rw,o-rw asterisk 1>&2)
 
-# Main here:
 FLAKE = ./dev/${HOSTNAME}
 HWCONF = dev/${HOSTNAME}/hardware-configuration.nix
 
@@ -29,13 +28,12 @@ setup: ${HWCONF}
 switch: ${HWCONF}
 	rm -f "dev/${HOSTNAME}/flake.lock"
 	nixos-rebuild switch --show-trace --flake "${FLAKE}#${HOSTNAME}"
-	nix-env --delete-generations +7
+	nix-env --profile /nix/var/nix/profiles/system --delete-generations +7
 	if test -f asterisk/Makefile; then ${MAKE} -C asterisk switch; fi
 
-gc:
+garbage:
 	nix-store --gc
 
-# Meta here:
-.PHONY: setup switch gc
+.PHONY: setup switch garbage
 .NOTPARALLEL:
 .DEFAULT_GOAL = switch
