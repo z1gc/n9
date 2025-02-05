@@ -1,6 +1,6 @@
 export HOSTNAME ?= $(shell hostname)
 FLAKE = ./octothorp/${HOSTNAME}
-GARBAGE = nix-collect-garbage --delete-older-than 2d
+GARBAGE = nix-collect-garbage --delete-older-than 7d
 NIX = nix --extra-experimental-features 'nix-command flakes'
 
 ifneq ($(shell grep '\s*nixosConfigurations\s*=' "${FLAKE}/flake.nix"),)

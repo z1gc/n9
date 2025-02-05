@@ -29,10 +29,8 @@
       wl-clipboard
       brave
       ptyxis
-
-      # TODO: dconf for extensions?
-      gnomeExtensions.pop-shell
-      gnomeExtensions.customize-ibus
+      nautilus
+      gnome-tweaks
     ];
 
     # Why not in services?

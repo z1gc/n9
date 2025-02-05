@@ -54,6 +54,9 @@ let
               wget
               age
               p7zip
+              jq
+              yq
+              cached-nix-shell
 
               strace
               sysstat

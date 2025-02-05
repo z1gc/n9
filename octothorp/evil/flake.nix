@@ -9,7 +9,7 @@
       nixosConfigurations = n9.lib.nixos self {
         modules = with n9.lib.nixos-modules; [
           ./hardware-configuration.nix
-          (disk.zfs "/dev/nvme0n1")
+          (disk.zfs "/dev/disk/by-id/nvme-eui.002538b231b633a2")
           desktop.gnome
         ];
       };
@@ -18,18 +18,29 @@
         packages = [
           "git-repo"
           "jetbrains.clion"
+          "pop-launcher"
+          "dconf-editor"
         ];
 
         modules = with n9.lib.home-modules; [
           editor.helix
           shell.fish
           (
-            { config, ... }:
+            { config, pkgs, ... }:
             {
               sops.secrets.ssh-config = n9.lib.utils.sopsBinary ./ssh-config;
               programs.ssh = {
                 enable = true;
                 includes = [ config.sops.secrets.ssh-config.path ];
+              };
+
+              # TODO: desktop.gnome, dconf
+              programs.gnome-shell = {
+                enable = true;
+                extensions = [
+                  { package = pkgs.gnomeExtensions.pop-shell; }
+                  { package = pkgs.gnomeExtensions.customize-ibus; }
+                ];
               };
             }
           )
