@@ -1,3 +1,0 @@
-[submodule "asterisk"]
-	path = asterisk
-	url = git@github.com:plxty/asterisk.git
