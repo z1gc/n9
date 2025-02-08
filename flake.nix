@@ -25,7 +25,7 @@
 
       disk =
         args: type: device:
-        (importArgs ./disk) { inherit type device; };
+        (importArgs ./nixos/disk) { inherit type device; };
     in
     {
       # NixOS, Nix (For package manager only, use lib.mkNixPackager?):

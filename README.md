@@ -15,9 +15,7 @@ A sample of how to use my configuration (maybe):
   outputs =
     { self, n9, ... }:
     {
-      system = "x86_64-linux";
-
-      nixosConfigurations = n9.lib.nixos self {
+      nixosConfigurations = n9.lib.nixos self "evil" "x86_64-linux" {
         packages = [ "btrfs-progs" ];
         modules = with n9.lib.nixos-modules; [
           ./hardware-configuration.nix

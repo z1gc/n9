@@ -12,7 +12,7 @@
 # @input modules: To nixosSystem.
 # @input packages: Shortcut.
 # @output: AttrSet of ${hostName} of ${that}.
-that: # <- Module arguments
+that: hostName: system: # <- Module arguments
 
 {
   modules,
@@ -23,13 +23,12 @@ let
   inherit (self.lib) utils;
   inherit (nixpkgs) lib;
 
-  hostName = builtins.unsafeDiscardStringContext (builtins.baseNameOf that);
   hostId = builtins.substring 63 8 (builtins.hashString "sha512" hostName);
   hasHome = that ? homeConfigurations;
 in
 {
   ${hostName} = lib.nixosSystem {
-    inherit (that) system;
+    inherit system;
 
     modules =
       [
