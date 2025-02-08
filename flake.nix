@@ -69,9 +69,6 @@
           inherit sopsFile;
           format = "binary";
         };
-
-        # 1 for argument numbers, huh.
-        user1 = username: { inherit username; };
       };
     };
 }

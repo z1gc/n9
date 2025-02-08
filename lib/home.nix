@@ -4,34 +4,34 @@
   home-manager,
   sops-nix,
   ...
-}@args:
+}@args: # <- Flake inputs
 
 # Making a Home Manager things.
+# @input username: The username of it.
+#
 # If nixos:
-#   @input {username,uid,home}: Information about the user.
-#                               The group's info is same as the user.
+#   @input uid,home: Information about the user.
+#                    The group's info is same as the user.
 #   @input modules: Imports from.
 #   @input packages: Shortcut of home.packages, within the imports context.
 #                    Due to this restriction, this should be array of strings.
 #                    For other packages, you might need to write a module.
 #   @output: AttrSet of ${username} = {uid,home,config}.
 # Else (standalone homeManager):
-#   @input {username,home}: Information about the user.
+#   @input home: Information about the user.
 #   @input modules: Imports from.
 #   @input packages: Shortcut of home.packages.
 #   @output: What homeManagerConfiguration generates, should use `home-manager
 #            switch` instead.
 # Using if/else here because we want to maintain a consistency of dev's flake.
-that:
+that: username: # <- Module arguments
+
 {
-  username,
   uid ? 1000,
   home ? "/home/${username}",
-}:
-{
   packages ? [ ],
   modules ? [ ],
-}:
+}: # <- NixOS or HomeManager configurations (kind of)
 
 let
   inherit (self.lib) utils;

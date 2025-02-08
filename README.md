@@ -24,7 +24,7 @@ A sample of how to use my configuration (maybe):
         ];
       };
 
-      homeConfigurations = n9.lib.home self (n9.lib.utils.user2 "byte" ./passwd) {
+      homeConfigurations = n9.lib.home self "byte" {
         packages = [ "jetbrains.clion" ];
         modules = with n9.lib.home-modules; [
           editor.helix
