@@ -16,6 +16,10 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    colmena = {
+      url = "github:zhaofengli/colmena";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -48,12 +52,12 @@
       # Simple utils, mainly for making the code "shows" better.
       # In modules, you can refer it using `self.lib.utils`.
       lib.utils = rec {
+        # A little bit clean way to add patches, and a single patch:
         mkPatches =
           patches: pkg: pkgs:
           pkg.overrideAttrs (prev: {
             patches = (prev.patches or [ ]) ++ (builtins.map pkgs.fetchpatch patches);
           });
-
         mkPatch = patch: mkPatches [ patch ];
 
         # Turn "xyz" to pkgs.xyz (only if "xyz" is string) helper:
@@ -63,6 +67,17 @@
             nixpkgs.lib.attrsets.attrByPath (nixpkgs.lib.strings.splitString "." maybeStringPath) null set
           else
             maybeStringPath;
+
+        # Fetch all directories:
+        dirs =
+          dir:
+          let
+            contents = builtins.readDir dir;
+            directories = builtins.filter ({ value, ... }: value == "directory") (
+              nixpkgs.lib.attrsToList contents
+            );
+          in
+          builtins.map ({ name, ... }: name) directories;
 
         # Oneliner sops binary:
         sopsBinary = sopsFile: {

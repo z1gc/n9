@@ -3,34 +3,49 @@
   nixpkgs,
   home-manager,
   sops-nix,
+  colmena,
   ...
 }@args: # <- Flake inputs
 
 # Make NixOS, with disk, bootloader, networking, hostname, etc.
-# TODO: mkIf style configurations? It loses flexibility.
+# Switched from `nixosSystem` to `colmenaHive`, for my own flaver (the colmena
+# has both remote and local deployment, which is quite nice).
 # @input that: Flake `self` of the modules.
 # @input modules: To nixosSystem.
 # @input packages: Shortcut.
+# @input deploy: Where you want to deploy?
 # @output: AttrSet of ${hostName} of ${that}.
+# TODO: Revert using `nixosSystem` when there's no deployment?
 that: hostName: system: # <- Module arguments
 
 {
   modules,
   packages ? [ ],
+  deploy ? { },
 }: # <- NixOS `nixosSystem {}` (Hmm, not really)
 
 let
   inherit (self.lib) utils;
-  inherit (nixpkgs) lib;
 
+  nodeNixpkgs = nixpkgs.legacyPackages.${system};
   hostId = builtins.substring 63 8 (builtins.hashString "sha512" hostName);
   hasHome = that ? homeConfigurations;
+  deployment = {
+    allowLocalDeployment = true;
+  } // deploy;
 in
-{
-  ${hostName} = lib.nixosSystem {
-    inherit system;
+colmena.lib.makeHive {
+  meta = {
+    # TODO: Multiple calls? Flavor of mine is to deploy each machine
+    # individually, instead of "bunch" (have no that much of machines, huh).
+    nixpkgs = nodeNixpkgs;
+    nodeNixpkgs.${hostName} = nodeNixpkgs;
+  };
 
-    modules =
+  ${hostName} = {
+    inherit deployment;
+
+    imports =
       [
         (import ../pkgs/nixpkgs.nix args)
         (
@@ -104,8 +119,8 @@ in
           home-manager.useUserPackages = true;
         }
       ]
-      ++ (lib.optionals (lib.trace "hasHome? ${lib.boolToString hasHome}" hasHome) (
-        lib.mapAttrsToList (
+      ++ (nixpkgs.lib.optionals hasHome (
+        nixpkgs.lib.mapAttrsToList (
           # TODO: Assert username is not root:
           username:
           {
