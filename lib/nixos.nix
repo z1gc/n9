@@ -2,7 +2,6 @@
   self,
   nixpkgs,
   home-manager,
-  sops-nix,
   colmena,
   ...
 }@args: # <- Flake inputs
@@ -26,13 +25,17 @@ that: hostName: system: # <- Module arguments
 
 let
   inherit (self.lib) utils;
+  inherit (nixpkgs) lib;
 
   nodeNixpkgs = nixpkgs.legacyPackages.${system};
   hostId = builtins.substring 63 8 (builtins.hashString "sha512" hostName);
   hasHome = that ? homeConfigurations;
-  deployment = {
+  deployment = nixpkgs.lib.recursiveUpdate {
     allowLocalDeployment = true;
-  } // deploy;
+    keys = lib.optionalAttrs hasHome (
+      lib.fold (a: b: a.deploy.keys // b) { } (lib.attrValues that.homeConfigurations)
+    );
+  } deploy;
 in
 colmena.lib.makeHive {
   meta = {
@@ -77,7 +80,6 @@ colmena.lib.makeHive {
                 [
                   gnumake
                   git
-                  sops
                 ]
                 ++ (map (utils.attrByIfStringPath pkgs) packages);
             };
@@ -108,27 +110,25 @@ colmena.lib.makeHive {
           }
         )
 
-        sops-nix.nixosModules.sops
-        {
-          sops.age.keyFile = "/root/.cache/.whats-yours-is-mine";
-        }
-
         home-manager.nixosModules.home-manager
         {
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
         }
       ]
-      ++ (nixpkgs.lib.optionals hasHome (
-        nixpkgs.lib.mapAttrsToList (
-          # TODO: Assert username is not root:
+      ++ (lib.optionals hasHome (
+        (lib.mapAttrsToList (
           username:
           {
             uid,
             home,
+            passwd,
             config,
+            ...
           }:
-          args: {
+          args:
+          assert lib.assertMsg (username != "root") "can't manage root!";
+          {
             users = {
               groups.${username} = {
                 gid = uid;
@@ -139,12 +139,18 @@ colmena.lib.makeHive {
                 inherit uid home;
                 group = username;
                 extraGroups = [ "wheel" ];
+                hashedPasswordFile = passwd;
               };
             };
 
             home-manager.users.${username} = config;
           }
-        ) that.homeConfigurations
+        ) that.homeConfigurations)
+        ++ [
+          {
+            users.users.root.hashedPassword = "!";
+          }
+        ]
       ))
       ++ modules;
   };

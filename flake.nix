@@ -12,10 +12,6 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    sops-nix = {
-      url = "github:Mic92/sops-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     colmena = {
       url = "github:zhaofengli/colmena";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -78,12 +74,6 @@
             );
           in
           builtins.map ({ name, ... }: name) directories;
-
-        # Oneliner sops binary:
-        sopsBinary = sopsFile: {
-          inherit sopsFile;
-          format = "binary";
-        };
       };
     };
 }
