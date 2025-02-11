@@ -79,6 +79,7 @@ let
       // {
         user = username;
         group = username;
+        uploadAt = "post-activation"; # After user and home created.
       }
     ) deployment.keys)
     # Password argument:
