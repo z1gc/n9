@@ -89,7 +89,7 @@ let
     };
 in
 {
-  ${username} = {
+  ${that.colmenaHive.passthru.hostName}.${username} = {
     inherit
       uid
       home

@@ -12,6 +12,8 @@
 # TODO: Revert using `nixosSystem` when there's no deployment?
 #
 # @input that: Flake `self` of the modules.
+# @input hostName: The name you're.
+# @input bulk: For bulk mode, users should call makeHive themselves.
 # @input modules: To nixosSystem.
 # @input packages: Shortcut.
 # @input deployment: Where you want to deploy?
@@ -23,6 +25,7 @@
 that: hostName: system: # <- Module arguments
 
 {
+  bulk ? false,
   modules,
   packages ? [ ],
   deployment ? { },
@@ -35,17 +38,24 @@ let
   nodeNixpkgs = nixpkgs.legacyPackages.${system};
   hostId = builtins.substring 63 8 (builtins.hashString "sha512" hostName);
   hasHome = that ? homeConfigurations;
+  homeConfig = that.homeConfigurations.${hostName};
+
   combined = nixpkgs.lib.recursiveUpdate {
     allowLocalDeployment = true;
     keys = lib.optionalAttrs hasHome (
-      lib.fold (a: b: a.deployment.keys // b) { } (lib.attrValues that.homeConfigurations)
+      lib.fold (a: b: a.deployment.keys // b) { } (lib.attrValues homeConfig)
     );
   } deployment;
 in
-colmena.lib.makeHive {
+(if !bulk then colmena.lib.makeHive else lib.id) {
+  # For home.nix, n9 requires one-to-one configuration, can only have 1 host:
+  passthru = {
+    # inherit system;
+    inherit hostName;
+  };
+}
+// {
   meta = {
-    # TODO: Multiple calls? Flavor of mine is to deploy each machine
-    # individually, instead of "bunch" (have no that much of machines, huh).
     nixpkgs = nodeNixpkgs;
     nodeNixpkgs.${hostName} = nodeNixpkgs;
   };
@@ -148,7 +158,7 @@ colmena.lib.makeHive {
 
             home-manager.users.${username} = config;
           }
-        ) that.homeConfigurations)
+        ) homeConfig)
         ++ [
           {
             users.users.root.hashedPassword = "!";
