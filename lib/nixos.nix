@@ -135,15 +135,46 @@ let
     ))
     ++ (lib.optionals (deployment ? targetUser && deployment ? targetKey) [
       (
-        { pkgs, ... }:
+        { nodes, pkgs, ... }:
         let
           user = deployment.targetUser;
           uid = 27007;
+
           allow = command: {
             inherit command;
             options = [ "SETENV" ];
           };
-          store = "/nix/store/[[\\:alnum\\:]-.]*";
+
+          # https://github.com/zhaofengli/colmena/blob/main/src/nix/host/key_uploader.template.sh
+          # Restricted and checked access.
+          keyUploader = pkgs.writers.writeBash "key_uploader.sh" ''
+            set -euo pipefail
+            eval "$(grep -E '^[[:alnum:]]+=[[:alnum:]\-_''${}/."]+$' <<< "$2")"
+
+            case "$destination" in
+              ${
+                builtins.concatStringsSep "|" (
+                  lib.mapAttrsToList (_: v: v.path) nodes.${hostName}.config.deployment.keys
+                )
+              }) ;;
+              *)
+                echo "-EPERM ($destination)"
+                exit 1 ;;
+            esac
+
+            parent="$(dirname "$destination")"
+            if [[ ! -d "$parent" ]]; then
+              mkdir "$parent"
+            fi
+
+            touch "$tmp"
+            chown "$user:$group" "$tmp" || true
+            chmod "$permissions" "$tmp"
+            cat <&0 > "$tmp"
+            mv "$tmp" "$destination"
+          '';
+
+          store = "/nix/store/[a-z0-9]{32}-nixos-system-[a-zA-Z0-9.-]";
         in
         {
           users.groups.${user}.gid = uid;
@@ -151,29 +182,44 @@ let
             isSystemUser = true;
             inherit uid;
             group = user;
-            shell = pkgs.bash;
+            shell = pkgs.rush;
             hashedPassword = "!";
           };
 
           environment.etc."ssh/agent_keys.d/${user}" = {
-            text = deployment.targetKey;
             mode = "0644";
+            text = deployment.targetKey;
+          };
+
+          # TODO: Rush seems lack of setgid cap? @see may_setgroups
+          environment.etc."rush.rc" = {
+            mode = "0644";
+            text = ''
+              rush 2.0
+
+              rule upload-keys
+                match $user == "${user}" && ''${-3} == "/bin/sh"
+                set [-3] = "${keyUploader}"
+                fall-through
+
+              rule sudo
+                match $user == "${user}" && $0 == "sudo"
+                # acct on
+                # fork on
+            '';
           };
           security.sudo.extraRules = [
             {
-              users = [ deployment.targetUser ];
+              users = [ user ];
               runAs = "root";
               commands = [
-                # FIXME: Restrict using systemd-run or other sandboxie?
-                (allow "/run/current-system/sw/bin/sh -c *")
-                (allow "/run/current-system/sw/bin/nix-env --profile /nix/var/nix/profiles/system --set ${store}")
-                (allow "${store}/bin/switch-to-configuration switch")
-
-                # For buildOnTarget == true:
-                (allow "/run/current-system/sw/bin/nix-store --no-gc-warning --realise ${store}")
+                (allow "${keyUploader} -c ^[[\\:print\\:]]+$")
+                (allow "/run/current-system/sw/bin/nix-env --profile /nix/var/nix/profiles/system --set ^${store}$")
+                (allow "^${store}/bin/switch-to-configuration$ switch")
               ];
             }
           ];
+
           nix.settings.trusted-users = [ user ];
         }
       )
