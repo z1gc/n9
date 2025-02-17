@@ -175,12 +175,21 @@ let
           store = "/nix/store/[a-z0-9]{32}-nixos-system-[a-zA-Z0-9.-]";
         in
         {
+          # TODO: Rush seems lack of setgid cap? @see may_setgroups
+          # A better solution is to hack rush to avoid changing the groups.
+          security.wrappers.rush = {
+            setgid = true;
+            owner = "root";
+            group = "root";
+            source = "${pkgs.rush}/bin/rush";
+          };
+
           users.groups.${user}.gid = uid;
           users.users.${user} = {
             isSystemUser = true;
             inherit uid;
             group = user;
-            shell = pkgs.rush;
+            shell = "/run/wrappers/bin/rush";
             hashedPassword = "!";
           };
 
@@ -189,19 +198,19 @@ let
             text = deployment.targetKey;
           };
 
-          # TODO: Rush seems lack of setgid cap? @see may_setgroups
           environment.etc."rush.rc" = {
             mode = "0644";
             text = ''
               rush 2.0
 
               rule upload-keys
-                match $user == "${user}" && ''${-3} == "/bin/sh"
+                match $user == "${user}" && $# >= 3 && ''${-3} == "/bin/sh"
                 set [-3] = "${keyUploader}"
                 fall-through
 
               rule sudo
                 match $user == "${user}" && $0 == "sudo"
+                set [0] = "/run/wrappers/bin/sudo"
                 # acct on
                 # fork on
             '';
