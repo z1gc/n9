@@ -19,13 +19,49 @@
   };
 
   outputs =
-    { nixpkgs, ... }@args:
+    {
+      self,
+      nixpkgs,
+      colmena,
+      ...
+    }@args:
     let
+      inherit (nixpkgs) lib;
+
       importArgs = file: import file args;
 
       disk =
         args: type: device:
         (importArgs ./nixos/disk) { inherit type device; };
+
+      # Fetch all directories:
+      dirs =
+        dir:
+        let
+          contents = builtins.readDir dir;
+          directories = builtins.filter ({ value, ... }: value == "directory") (
+            nixpkgs.lib.attrsToList contents
+          );
+        in
+        builtins.map ({ name, ... }: name) directories;
+
+      hosts = builtins.map (
+        dir:
+        let
+          # Flake like import:
+          conf = import ./mach/${dir} (
+            args
+            // {
+              n9 = self;
+              self = conf;
+            }
+          );
+        in
+        conf.colmenaHive or { }
+      ) (dirs ./mach);
+
+      # Passthru is only needed for flake.nix, after that it has no work.
+      colmenaConfig = builtins.removeAttrs (lib.fold lib.recursiveUpdate { } hosts) [ "passthru" ];
     in
     {
       # NixOS, Nix (For package manager only, use lib.mkNixPackager?):
@@ -64,17 +100,6 @@
           else
             maybeStringPath;
 
-        # Fetch all directories:
-        dirs =
-          dir:
-          let
-            contents = builtins.readDir dir;
-            directories = builtins.filter ({ value, ... }: value == "directory") (
-              nixpkgs.lib.attrsToList contents
-            );
-          in
-          builtins.map ({ name, ... }: name) directories;
-
         # Setup SSH keys:
         sshKey =
           path:
@@ -94,5 +119,8 @@
             };
           };
       };
+
+      # All of the machines:
+      colmenaHive = colmena.lib.makeHive colmenaConfig;
     };
 }

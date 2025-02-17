@@ -2,7 +2,6 @@
   self,
   nixpkgs,
   home-manager,
-  colmena,
   ...
 }@args: # <- Flake inputs
 
@@ -31,7 +30,6 @@ let
   inherit (nixpkgs) lib;
 
   hostId = builtins.substring 63 8 (builtins.hashString "sha512" hostName);
-  hasColmena = that ? colmenaHive;
   hasHome = that ? homeConfigurations;
   homeConfig = that.homeConfigurations.${hostName};
 
@@ -239,28 +237,18 @@ in
     inherit hostName system;
   };
 }
-// (
-  if hasColmena then
-    (if (that.colmenaBulk or false) then lib.id else colmena.lib.makeHive) {
-      meta =
-        let
-          nodeNixpkgs = nixpkgs.legacyPackages.${system};
-        in
-        {
-          nixpkgs = nodeNixpkgs;
-          nodeNixpkgs.${hostName} = nodeNixpkgs;
-        };
-
-      "${hostName}" = {
-        imports = subModules;
-        deployment = combined;
-      };
-    }
-  else
+// {
+  meta =
+    let
+      nodeNixpkgs = nixpkgs.legacyPackages.${system};
+    in
     {
-      "${hostName}" = lib.nixosSystem {
-        inherit system;
-        modules = subModules;
-      };
-    }
-)
+      nixpkgs = nodeNixpkgs;
+      nodeNixpkgs.${hostName} = nodeNixpkgs;
+    };
+
+  "${hostName}" = {
+    imports = subModules;
+    deployment = combined;
+  };
+}

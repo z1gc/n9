@@ -239,6 +239,7 @@
       enable = true;
       userName = "Zigit Zo";
       userEmail = "ptr@ffi.fyi";
+      signing.format = "ssh";
     };
   };
 }
