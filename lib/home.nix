@@ -145,7 +145,7 @@ assert lib.assertMsg (username != "root") "can't manage root!";
       ]
       ++ lib.optionals (builtins.length authorizedKeys != 0 || builtins.length agentKeys != 0) [
         # FIXME: want a different port?
-        (self.lib.nixos-modules.sshd { })
+        (self.lib.nixos-modules.miscell.sshd { })
       ];
 
     deployment = combined;

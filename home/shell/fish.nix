@@ -1,4 +1,4 @@
-{ ... }: # <- Flake inputs
+# <- Flake inputs
 
 # Making the Fish shell.
 # No arguments. <- Module arguments

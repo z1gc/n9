@@ -1,4 +1,4 @@
-{ ... }: # <- Flake inputs
+# <- Flake inputs
 
 # Making the Helix editor.
 # No arguments. <- Module arguments.

@@ -1,4 +1,4 @@
-{ ... }: # <- Flake inputs
+# <- Flake inputs
 
 # Making a GNOME Desktop.
 # No arguments. <- Module arguments

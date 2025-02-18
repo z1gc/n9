@@ -30,12 +30,6 @@
       ...
     }@args:
     let
-      importArgs = file: import file args;
-
-      disk =
-        args: type: device:
-        (importArgs ./nixos/disk) { inherit type device; };
-
       # Fetch all directories:
       dirs =
         dir:
@@ -65,13 +59,6 @@
         ) (dirs ./mach)
       )) [ "passthru" ];
 
-      mkPatches =
-        patches: pkg: pkgs:
-        pkg.overrideAttrs (prev: {
-          patches = (prev.patches or [ ]) ++ (builtins.map pkgs.fetchpatch patches);
-        });
-      mkPatch = patch: mkPatches [ patch ];
-
       # @see nix/flake.nix
       systems = [
         "x86_64-linux"
@@ -81,58 +68,21 @@
     {
       # NixOS, Nix (For package manager only, use lib.mkNixPackager?):
       # TODO: With no hard code?
-      lib.nixos = importArgs ./lib/nixos.nix;
-      lib.nixos-modules = {
-        disk.zfs = disk args "zfs";
-        disk.btrfs = disk args "btrfs";
-        desktop.gnome = importArgs ./nixos/desktop/gnome.nix;
-        miscell.sshd = importArgs ./nixos/miscell/sshd.nix;
-      };
+      lib.nixos = import ./lib/nixos.nix args;
+      lib.nixos-modules = import ./nixos args;
 
       # User/home level modules, with home-manager:
-      lib.home = importArgs ./lib/home.nix;
-      lib.home-modules = {
-        desktop.pop-shell = importArgs ./home/desktop/pop-shell.nix;
-        editor.helix = importArgs ./home/editor/helix.nix;
-        shell.fish = importArgs ./home/shell/fish.nix;
-        v12n.boxes = importArgs ./home/v12n/boxes.nix;
-        miscell.git = importArgs ./home/miscell/git.nix;
-      };
+      lib.home = import ./lib/home.nix args;
+      lib.home-modules = import ./home args;
 
       # Simple utils, mainly for making the code "shows" better.
       # In modules, you can refer it using `self.lib.utils`.
-      lib.utils = {
-        # A little bit clean way to add patches, and a single patch:
-        inherit mkPatches mkPatch;
-
-        # Turn "xyz" to pkgs.xyz (only if "xyz" is string) helper:
-        attrByIfStringPath =
-          set: maybeStringPath:
-          if (builtins.typeOf maybeStringPath == "string") then
-            nixpkgs.lib.attrsets.attrByPath (nixpkgs.lib.strings.splitString "." maybeStringPath) null set
-          else
-            maybeStringPath;
-
-        # Setup SSH keys:
-        sshKey =
-          path:
-          let
-            key = builtins.baseNameOf path;
-          in
-          {
-            # ssh-keygen -f [private] -y > [public]
-            ${key} = {
-              keyFile = path;
-              permissions = "0400";
-              destDir = "@HOME@/.ssh";
-            };
-          };
-      };
+      lib.utils = import ./lib/utils.nix args;
 
       # All of the machines:
       colmenaHive = colmena.lib.makeHive nixosConfigurations;
 
       # Entry:
-      apps = nixpkgs.lib.genAttrs systems (importArgs ./lib/apps.nix);
+      apps = nixpkgs.lib.genAttrs systems (import ./lib/apps.nix args);
     };
 }

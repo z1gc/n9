@@ -1,4 +1,4 @@
-{ ... }: # <- Flake inputs
+# <- Flake inputs
 
 # GNOME Boxes, with libvirtd as backend.
 
