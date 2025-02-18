@@ -2,7 +2,7 @@
 
 {
   # Kind of a template.
-  colmenaHive = n9.lib.nixos self "nowhere" "x86_64-linux" {
+  nixosConfigurations = n9.lib.nixos self "nowhere" "x86_64-linux" {
     modules = with n9.lib.nixos-modules; [
       ./hardware-configuration.nix
       (disk.btrfs "/dev/vda")

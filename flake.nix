@@ -47,25 +47,23 @@
         in
         builtins.map ({ name, ... }: name) directories;
 
-      hosts = builtins.map (
-        dir:
-        let
-          # Flake like import:
-          conf = import ./mach/${dir} (
-            args
-            // {
-              n9 = self;
-              self = conf;
-            }
-          );
-        in
-        conf.colmenaHive
-      ) (dirs ./mach);
-
-      # Passthru is only needed for flake.nix, after that it has no work.
-      colmenaConfig = builtins.removeAttrs (nixpkgs.lib.fold nixpkgs.lib.recursiveUpdate { } hosts) [
-        "passthru"
-      ];
+      # To compat with nixosSystem, may used in the future.
+      nixosConfigurations = builtins.removeAttrs (nixpkgs.lib.fold nixpkgs.lib.recursiveUpdate { } (
+        builtins.map (
+          dir:
+          let
+            # Flake like import:
+            conf = import ./mach/${dir} (
+              args
+              // {
+                n9 = self;
+                self = conf;
+              }
+            );
+          in
+          conf.nixosConfigurations
+        ) (dirs ./mach)
+      )) [ "passthru" ];
 
       mkPatches =
         patches: pkg: pkgs:
@@ -93,8 +91,10 @@
       # User/home level modules, with home-manager:
       lib.home = importArgs ./lib/home.nix;
       lib.home-modules = {
+        desktop.pop-shell = importArgs ./home/desktop/pop-shell.nix;
         editor.helix = importArgs ./home/editor/helix.nix;
         shell.fish = importArgs ./home/shell/fish.nix;
+        v12n.boxes = importArgs ./home/v12n/boxes.nix;
         secret.ssh-key = importArgs ./home/secret/ssh-key.nix;
       };
 
@@ -119,21 +119,17 @@
             key = builtins.baseNameOf path;
           in
           {
+            # ssh-keygen -f [private] -y > [public]
             ${key} = {
               keyFile = path;
               permissions = "0400";
-              destDir = "@HOME@/.ssh";
-            };
-            "${key}.pub" = {
-              keyFile = "${path}.pub";
-              permissions = "0440";
               destDir = "@HOME@/.ssh";
             };
           };
       };
 
       # All of the machines:
-      colmenaHive = colmena.lib.makeHive colmenaConfig;
+      colmenaHive = colmena.lib.makeHive nixosConfigurations;
 
       # Entry:
       apps = nixpkgs.lib.genAttrs systems (importArgs ./lib/apps.nix);

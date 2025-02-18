@@ -4,7 +4,6 @@
 # No arguments. <- Module arguments
 
 { pkgs, ... }: # <- Nix `imports = []`
-
 {
   services = {
     xserver = {
@@ -31,6 +30,7 @@
       ptyxis
       nautilus
       gnome-tweaks
+      dconf-editor
     ];
 
     # Why not in services?

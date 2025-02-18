@@ -8,13 +8,15 @@
 # @input uid,home,groups: Information about the user.
 #                         Group's name and gid is same as the username and uid.
 # @input authorizedKeys: SSH keys for authorizing.
+# @input agentKeys: For passwordless SSH sudo, it's a little risky, but it is
+#                   needed for colmena.
 # @input packages: Shortcut of home.packages, within the imports context.
 #                  Due to this restriction, this should be array of strings.
 #                  For other packages, you might need to write a module.
 # @input modules: Imports from.
 # @input deployment: Additional arguments to deployer, currently supports keys.
 #
-# @output: AttrSet of {user,group,config,deployment}.
+# @output: AttrSet of {modules,deployment}.
 # Using if/else here because we want to maintain a consistency of dev's flake.
 that: username: passwd: # <- Module arguments
 
@@ -69,7 +71,7 @@ let
           };
         }
       )
-    ] ++ modules;
+    ] ++ (builtins.map (m: m.__home__ or m) modules);
 
     home = {
       inherit username;
@@ -103,9 +105,12 @@ in
 assert lib.assertMsg (username != "root") "can't manage root!";
 {
   # TODO: Way to assert unique username?
-  ${that.colmenaHive.passthru.hostName}.${username} = {
+  ${that.nixosConfigurations.passthru.hostName}.${username} = {
     modules =
-      [
+      (builtins.filter (m: m != null) (
+        builtins.map (m: if m ? __nixos__ then m.__nixos__ username else null) modules
+      ))
+      ++ [
         {
           users.groups.${username}.gid = uid;
 

@@ -4,7 +4,7 @@ let
   secret = "@ASTERISK@/harm";
 in
 {
-  colmenaHive = n9.lib.nixos self "harm" "aarch64-linux" {
+  nixosConfigurations = n9.lib.nixos self "harm" "aarch64-linux" {
     modules = with n9.lib.nixos-modules; [
       ./hardware-configuration.nix
       (
