@@ -54,7 +54,7 @@ let
 
   burnInstall = pkgs.writers.writeBash "burn-install" ''
     ${burn}
-    echo "$1"
+    test -n "$1"
 
     # The nixos-anywhere only allows `nixosConfigurations.*`:
     "${pkgs.gnused}/bin/sed" -i -E \

@@ -22,10 +22,10 @@ nix run
 nix run . evil
 
 # nixos-anywhere install
-nix run .#install evil
+nix run '.#install' evil
 
 # nix gc
-nix run .#gc
+nix run '.#gc'
 ```
 
 Checkout `mach` directory for my own builds, using [colmena](https://github.com/zhaofengli/colmena).
