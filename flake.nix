@@ -16,6 +16,10 @@
       url = "github:zhaofengli/colmena";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nixos-anywhere = {
+      url = "github:nix-community/nixos-anywhere";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -26,8 +30,6 @@
       ...
     }@args:
     let
-      inherit (nixpkgs) lib;
-
       importArgs = file: import file args;
 
       disk =
@@ -57,11 +59,26 @@
             }
           );
         in
-        conf.colmenaHive or { }
+        conf.colmenaHive
       ) (dirs ./mach);
 
       # Passthru is only needed for flake.nix, after that it has no work.
-      colmenaConfig = builtins.removeAttrs (lib.fold lib.recursiveUpdate { } hosts) [ "passthru" ];
+      colmenaConfig = builtins.removeAttrs (nixpkgs.lib.fold nixpkgs.lib.recursiveUpdate { } hosts) [
+        "passthru"
+      ];
+
+      mkPatches =
+        patches: pkg: pkgs:
+        pkg.overrideAttrs (prev: {
+          patches = (prev.patches or [ ]) ++ (builtins.map pkgs.fetchpatch patches);
+        });
+      mkPatch = patch: mkPatches [ patch ];
+
+      # @see nix/flake.nix
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
     in
     {
       # NixOS, Nix (For package manager only, use lib.mkNixPackager?):
@@ -83,14 +100,9 @@
 
       # Simple utils, mainly for making the code "shows" better.
       # In modules, you can refer it using `self.lib.utils`.
-      lib.utils = rec {
+      lib.utils = {
         # A little bit clean way to add patches, and a single patch:
-        mkPatches =
-          patches: pkg: pkgs:
-          pkg.overrideAttrs (prev: {
-            patches = (prev.patches or [ ]) ++ (builtins.map pkgs.fetchpatch patches);
-          });
-        mkPatch = patch: mkPatches [ patch ];
+        inherit mkPatches mkPatch;
 
         # Turn "xyz" to pkgs.xyz (only if "xyz" is string) helper:
         attrByIfStringPath =
@@ -122,5 +134,8 @@
 
       # All of the machines:
       colmenaHive = colmena.lib.makeHive colmenaConfig;
+
+      # Entry:
+      apps = nixpkgs.lib.genAttrs systems (importArgs ./lib/apps.nix);
     };
 }

@@ -59,13 +59,7 @@ let
 
           environment = {
             sessionVariables.NIX_CRATES_INDEX = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/";
-
-            systemPackages =
-              with pkgs;
-              [
-                git
-              ]
-              ++ (map (utils.attrByIfStringPath pkgs) packages);
+            systemPackages = map (utils.attrByIfStringPath pkgs) packages;
           };
 
           time.timeZone = "Asia/Shanghai";
@@ -107,130 +101,15 @@ let
         home-manager.useGlobalPkgs = true;
       }
     ]
-    ++ (lib.optionals hasHome (
-      (lib.mapAttrsToList (
-        username:
-        {
-          user,
-          group,
-          config,
-          ...
-        }:
-        # { pkgs, ... }:
-        assert lib.assertMsg (username != "root") "can't manage root!";
-        {
-          users = {
-            groups.${username} = group;
-            users.${username} = user;
-          };
-
-          home-manager.users.${username} = config;
-        }
-      ) homeConfig)
-      ++ [
-        { users.users.root.hashedPassword = "!"; }
-      ]
-    ))
-    ++ (lib.optionals (deployment ? targetUser && deployment ? targetKey) [
-      (
-        { nodes, pkgs, ... }:
-        let
-          user = deployment.targetUser;
-          uid = 27007;
-
-          allow = command: {
-            inherit command;
-            options = [ "SETENV" ];
-          };
-
-          # https://github.com/zhaofengli/colmena/blob/main/src/nix/host/key_uploader.template.sh
-          # Restricted and checked access.
-          keyUploader = pkgs.writers.writeBash "key_uploader.sh" ''
-            set -euo pipefail
-            eval "$(grep -E '^[[:alnum:]]+=[[:alnum:]\-_''${}/."]+$' <<< "$2")"
-
-            case "$destination" in
-              ${
-                builtins.concatStringsSep "|" (
-                  lib.mapAttrsToList (_: v: v.path) nodes.${hostName}.config.deployment.keys
-                )
-              }) ;;
-              *)
-                echo "-EPERM ($destination)"
-                exit 1 ;;
-            esac
-
-            parent="$(dirname "$destination")"
-            if [[ ! -d "$parent" ]]; then
-              mkdir "$parent"
-            fi
-
-            touch "$tmp"
-            chown "$user:$group" "$tmp" || true
-            chmod "$permissions" "$tmp"
-            cat <&0 > "$tmp"
-            mv "$tmp" "$destination"
-          '';
-
-          store = "/nix/store/[a-z0-9]{32}-nixos-system-[a-zA-Z0-9.-]";
-        in
-        {
-          # TODO: Rush seems lack of setgid cap? @see may_setgroups
-          # A better solution is to hack rush to avoid changing the groups.
-          security.wrappers.rush = {
-            setgid = true;
-            owner = "root";
-            group = "root";
-            source = "${pkgs.rush}/bin/rush";
-          };
-
-          users.groups.${user}.gid = uid;
-          users.users.${user} = {
-            isSystemUser = true;
-            inherit uid;
-            group = user;
-            shell = "/run/wrappers/bin/rush";
-            hashedPassword = "!";
-          };
-
-          environment.etc."ssh/agent_keys.d/${user}" = {
-            mode = "0644";
-            text = deployment.targetKey;
-          };
-
-          environment.etc."rush.rc" = {
-            mode = "0644";
-            text = ''
-              rush 2.0
-
-              rule upload-keys
-                match $user == "${user}" && $# >= 3 && ''${-3} == "/bin/sh"
-                set [-3] = "${keyUploader}"
-                fall-through
-
-              rule sudo
-                match $user == "${user}" && $0 == "sudo"
-                set [0] = "/run/wrappers/bin/sudo"
-                # acct on
-                # fork on
-            '';
-          };
-          security.sudo.extraRules = [
-            {
-              users = [ user ];
-              runAs = "root";
-              commands = [
-                (allow "${keyUploader} -c ^[[\\:print\\:]]+$")
-                (allow "/run/current-system/sw/bin/nix-env --profile /nix/var/nix/profiles/system --set ^${store}$")
-                (allow "^${store}/bin/switch-to-configuration$ switch")
-              ];
-            }
-          ];
-
-          nix.settings.trusted-users = [ user ];
-        }
-      )
+    ++ (lib.optionals (deployment ? targetKey) [
+      # nix key generate-secret --key-name dotfiles.rockwolf.eu-X > .nix-key
+      # cat .nix-key | nix key convert-secret-to-public
+      { nix.settings.trusted-public-keys = [ deployment.targetKey ]; }
     ])
+    ++ (lib.optionals hasHome (
+      (lib.flatten (lib.mapAttrsToList (_: v: v.modules) homeConfig))
+      ++ [ { users.users.root.hashedPassword = "!"; } ]
+    ))
     ++ modules;
 
   combined = nixpkgs.lib.recursiveUpdate {
@@ -241,12 +120,11 @@ let
   } (builtins.removeAttrs deployment [ "targetKey" ]);
 in
 {
-  # For home.nix, n9 requires one-to-one configuration, can only have 1 host:
+  # TODO: Way to assert one-to-one configuration?
   passthru = {
     inherit hostName system;
   };
-}
-// {
+
   meta =
     let
       nodeNixpkgs = nixpkgs.legacyPackages.${system};

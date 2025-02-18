@@ -12,8 +12,8 @@
     deployment = {
       targetHost = "127.0.0.1";
       targetPort = 2233;
-      targetUser = "zNFoK8jJUQvT3zDK";
-      targetKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICw9akIf3We4wbAwVfaqr8ANZYHLbtQ5sQGz1W5ZUE8Y byte@evil";
+      targetUser = "byte";
+      targetKey = "evil.xa-1:3N+fGCh9nVbctbwFhQad1qF2EqOp6FM83E08sBNGIlw=";
     };
   };
 
@@ -22,6 +22,10 @@
     modules = with n9.lib.home-modules; [
       editor.helix
       shell.fish
+    ];
+
+    agentKeys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICw9akIf3We4wbAwVfaqr8ANZYHLbtQ5sQGz1W5ZUE8Y byte@evil"
     ];
   };
 }

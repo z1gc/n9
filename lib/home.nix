@@ -22,6 +22,7 @@ that: username: passwd: # <- Module arguments
   uid ? 1000,
   home ? "/home/${username}",
   authorizedKeys ? [ ],
+  agentKeys ? [ ],
   groups ? [ ],
   packages ? [ ],
   modules ? [ ],
@@ -99,19 +100,36 @@ let
       };
     };
 in
+assert lib.assertMsg (username != "root") "can't manage root!";
 {
+  # TODO: Way to assert unique username?
   ${that.colmenaHive.passthru.hostName}.${username} = {
-    group.gid = uid;
-    user = {
-      isNormalUser = true;
-      inherit uid home;
-      group = username;
-      extraGroups = [ "wheel" ] ++ groups;
-      hashedPasswordFile = "/run/keys/passwd-${username}";
-      openssh.authorizedKeys.keys = authorizedKeys;
-    };
+    modules =
+      [
+        {
+          users.groups.${username}.gid = uid;
 
-    inherit config;
+          users.users.${username} = {
+            isNormalUser = true;
+            inherit uid home;
+            group = username;
+            extraGroups = [ "wheel" ] ++ groups;
+            hashedPasswordFile = "/run/keys/passwd-${username}";
+            openssh.authorizedKeys.keys = authorizedKeys;
+          };
+
+          home-manager.users.${username} = config;
+        }
+      ]
+      ++ lib.optionals (builtins.length agentKeys != 0) [
+        {
+          environment.etc."ssh/agent_keys.d/${username}" = {
+            text = builtins.concatStringsSep "\n" agentKeys;
+            mode = "0644";
+          };
+        }
+      ];
+
     deployment = combined;
   };
 }
