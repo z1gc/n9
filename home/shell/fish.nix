@@ -16,6 +16,7 @@
       enable = true;
 
       # https://nixos.wiki/wiki/Fish
+      # TODO: only in plxty.
       bashrcExtra = ''
         case "$(${pkgs.procps}/bin/ps --no-header --pid=$PPID --format=comm)" in
         "fish"|"systemd")
@@ -232,14 +233,6 @@
         up = "upto";
         ze = "zoxide query";
       };
-    };
-
-    # TODO: New file:
-    git = {
-      enable = true;
-      userName = "Zigit Zo";
-      userEmail = "ptr@ffi.fyi";
-      signing.format = "ssh";
     };
   };
 }

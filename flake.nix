@@ -86,6 +86,7 @@
         disk.zfs = disk args "zfs";
         disk.btrfs = disk args "btrfs";
         desktop.gnome = importArgs ./nixos/desktop/gnome.nix;
+        miscell.sshd = importArgs ./nixos/miscell/sshd.nix;
       };
 
       # User/home level modules, with home-manager:
@@ -95,7 +96,7 @@
         editor.helix = importArgs ./home/editor/helix.nix;
         shell.fish = importArgs ./home/shell/fish.nix;
         v12n.boxes = importArgs ./home/v12n/boxes.nix;
-        secret.ssh-key = importArgs ./home/secret/ssh-key.nix;
+        miscell.git = importArgs ./home/miscell/git.nix;
       };
 
       # Simple utils, mainly for making the code "shows" better.

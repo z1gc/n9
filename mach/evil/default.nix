@@ -8,6 +8,7 @@ in
     modules = with n9.lib.nixos-modules; [
       ./hardware-configuration.nix
       (disk.zfs "/dev/disk/by-id/nvme-eui.002538b231b633a2")
+      (miscell.sshd { })
     ];
   };
 
@@ -23,6 +24,7 @@ in
       desktop.pop-shell
       v12n.boxes
       { programs.ssh.includes = [ "config.d/*" ]; }
+      miscell.git
     ];
 
     deployment.keys = (n9.lib.utils.sshKey "${secret}/id_ed25519") // {

@@ -5,7 +5,7 @@
 
 {
   # TODO: Nobody uses the desktop.gnome, why not remove?
-  __nixos__ = _: self.lib.nixos-modules.desktop.gnome;
+  __nixos__ = self.lib.nixos-modules.desktop.gnome;
 
   __home__ =
     { pkgs, ... }:

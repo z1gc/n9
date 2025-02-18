@@ -1,12 +1,11 @@
 { ... }: # <- Flake inputs
 
 # GNOME Boxes, with libvirtd as backend.
-# No arguments. <- Module arguments
 
 {
   __nixos__ =
-    username:
-    { pkgs, ... }:
+    { username }: # <- Module arguments (for NixOS)
+    { pkgs, ... }: # <- NixOS imports
     {
       # https://nixos.wiki/wiki/Libvirt
       virtualisation.libvirtd =

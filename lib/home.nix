@@ -108,7 +108,16 @@ assert lib.assertMsg (username != "root") "can't manage root!";
   ${that.nixosConfigurations.passthru.hostName}.${username} = {
     modules =
       (builtins.filter (m: m != null) (
-        builtins.map (m: if m ? __nixos__ then m.__nixos__ username else null) modules
+        builtins.map (
+          m:
+          if m ? __nixos__ then
+            if builtins.isFunction m.__nixos__ && (builtins.functionArgs m.__nixos__) ? username then
+              m.__nixos__ { inherit username; }
+            else
+              m.__nixos__
+          else
+            null
+        ) modules
       ))
       ++ [
         {
@@ -133,6 +142,10 @@ assert lib.assertMsg (username != "root") "can't manage root!";
             mode = "0644";
           };
         }
+      ]
+      ++ lib.optionals (builtins.length authorizedKeys != 0 || builtins.length agentKeys != 0) [
+        # FIXME: want a different port?
+        (self.lib.nixos-modules.sshd { })
       ];
 
     deployment = combined;

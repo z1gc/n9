@@ -74,23 +74,6 @@ let
           };
 
           system.stateVersion = "25.05";
-
-          # TODO: To other places.
-          services.openssh = {
-            enable = true;
-            ports = [ 22 ];
-            authorizedKeysFiles = [ "/etc/ssh/agent_keys.d/%u" ];
-          };
-          networking.firewall.allowedTCPPorts = [ 22 ];
-
-          # Fine-gran control of which user can use PAM to authorize things.
-          security.pam = {
-            sshAgentAuth = {
-              enable = true;
-              authorizedKeysFiles = [ "/etc/ssh/agent_keys.d/%u" ];
-            };
-            services.sudo.sshAgentAuth = true;
-          };
         }
       )
 
@@ -122,7 +105,7 @@ in
 {
   # TODO: Way to assert one-to-one configuration?
   passthru = {
-    inherit hostName system;
+    inherit hostName;
   };
 
   meta =
@@ -130,7 +113,7 @@ in
       nodeNixpkgs = nixpkgs.legacyPackages.${system};
     in
     {
-      nixpkgs = nodeNixpkgs;
+      nixpkgs = { inherit lib; }; # doesn't matter
       nodeNixpkgs.${hostName} = nodeNixpkgs;
     };
 
