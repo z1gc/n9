@@ -29,6 +29,6 @@ in
 
     secrets =
       (n9.lib.utils.sshKey "${secret}/id_ed25519")
-      // (n9.lib.utils.secret3 "hosts" "${secret}/ssh" ".ssh/config.d");
+      // (n9.lib.utils.secret "${secret}/ssh" ".ssh/config.d/hosts");
   };
 }

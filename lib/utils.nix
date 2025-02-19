@@ -17,12 +17,17 @@ rec {
     else
       maybeStringPath;
 
-  # Secret:
-  secret3 = name: keyFile: destDir: {
-    ${name} = { inherit keyFile destDir; };
-  };
-  secret2 = path: secret3 (builtins.baseNameOf path) path;
+  # Secret. TODO: duplicate key? colmena have bug dealing with `keys.name`.
+  secret =
+    keyFile: dest:
+    let
+      name = builtins.baseNameOf dest;
+      destDir = builtins.dirOf dest;
+    in
+    {
+      ${name} = { inherit keyFile destDir; };
+    };
 
   # ssh-keygen -f [private] -y > [public]
-  sshKey = path: secret2 path ".ssh";
+  sshKey = path: secret path ".ssh/${builtins.baseNameOf path}";
 }

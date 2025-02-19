@@ -17,7 +17,7 @@ in
       targetUser = "byte";
     };
 
-    secrets = n9.lib.utils.secret2 "${secret}/wan" "/etc/ppp/secrets";
+    secrets = n9.lib.utils.secret "${secret}/wan" "/etc/ppp/secrets/wan";
   };
 
   homeConfigurations = n9.lib.home self "byte" "${secret}/passwd" {
