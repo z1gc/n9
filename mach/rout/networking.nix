@@ -190,7 +190,7 @@ in
         "10.254.0.1,10.254.254.254,72h"
         "::,constructor:${ports.wan},slaac,ra-stateless,ra-names,72h"
       ];
-      domain = "xa"; # trans
+      domain = "y.xas.is";
       dhcp-host = [
         # @see /var/lib/dnsmasq/dnsmasq.leases
         "24:5e:be:87:47:cc,10.254.38.179" # snap

@@ -8,12 +8,12 @@ in
     modules = with n9.lib.nixos-modules; [
       ./hardware-configuration.nix
       (disk.btrfs "/dev/mmcblk0")
-      (import ./networking.nix)
+      ./networking.nix
     ];
 
     deployment = {
       buildOnTarget = true;
-      targetHost = "wa.y.xas.is";
+      targetHost = "rout.y.xas.is";
       targetUser = "byte";
     };
 
