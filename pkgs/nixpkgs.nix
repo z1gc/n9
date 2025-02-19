@@ -11,32 +11,16 @@ in
 {
   nixpkgs.overlays = [
     (self: super: {
-      helix = utils.mkPatch {
-        url = "https://github.com/plxty/helix/commit/16bff48d998d01d87f41821451b852eb2a8cf627.patch";
-        hash = "sha256-JBhz0X7/cdRDZ4inasPvxs+xlktH2+cK0190PDxPygE=";
-      } super.helix pkgs;
-
-      openssh = utils.mkPatch {
-        url = "https://github.com/plxty/openssh-portable/commit/b3320c50cb0c74bcc7f0dade450c1660fd09b241.patch";
-        hash = "sha256-kiR/1Jz4h4z+fIW9ePgNjEXq0j9kHILPi9UD4JruV7M=";
-      } super.openssh pkgs;
-
+      helix = utils.patch super.helix ../patches/helix-taste.patch;
+      openssh = utils.patch super.openssh ../patches/openssh-plainpass.patch;
       ibus-engines = super.ibus-engines // {
         # We can have a override chain! Hooray!
-        rime =
-          (utils.mkPatch {
-            url = "https://github.com/plxty/ibus-rime/commit/d5baa3f648b409403bff87dddaf291c937de0d33.patch";
-            hash = "sha256-VtgBImxvrVJGEfAvEW4rFDLghNKaxPNvrTsnEwPVakE=";
-          } super.ibus-engines.rime pkgs).override
-            (prev: {
-              rimeDataPkgs = [ (pkgs.callPackage ./rime-ice.nix { }) ];
-            });
+        rime = (utils.patch super.ibus-engines.rime ../patches/ibus-rime-temp-ascii.patch).override (prev: {
+          rimeDataPkgs = [ (pkgs.callPackage ./rime-ice.nix { }) ];
+        });
       };
-
-      librime = utils.mkPatch {
-        url = "https://github.com/plxty/librime/commit/c550986e57d82fe14166ca8169129607fa71a64f.patch";
-        hash = "sha256-9jLSf17MBg4tHQ9cPZG4SN7uD1yOdGe/zfJrXfoZneE=";
-      } super.librime pkgs;
+      librime = utils.patch super.librime ../patches/librime-temp-ascii.patch;
+      ppp = utils.patch super.ppp ../patches/ppp-run-resolv.patch;
 
       brave = super.brave.override (prev: {
         commandLineArgs = builtins.concatStringsSep " " [
@@ -45,11 +29,6 @@ in
           "--sync-url=https://brave-sync.pteno.cn/v2"
         ];
       });
-
-      ppp = utils.mkPatch {
-        url = "https://github.com/plxty/ppp/commit/a86a429fe59f8f8386771f7aefa0cb4cc68e4897.patch";
-        hash = "sha256-QBkVFfcBhdI/hHiMpCDw5yryU50SBWuxZvmegK83SiQ=";
-      } super.ppp pkgs;
     })
   ];
 

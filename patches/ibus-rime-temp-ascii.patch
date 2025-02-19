@@ -1,0 +1,40 @@
+From d5baa3f648b409403bff87dddaf291c937de0d33 Mon Sep 17 00:00:00 2001
+From: Zigit Zo <ptr@ffi.fyi>
+Date: Thu, 16 Jan 2025 14:39:21 +0800
+Subject: [PATCH] feat: temp_ascii
+
+---
+ rime_engine.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/rime_engine.c b/rime_engine.c
+index 2641c39..3f7bcdb 100644
+--- a/rime_engine.c
++++ b/rime_engine.c
+@@ -224,6 +224,7 @@ static void ibus_rime_update_status(IBusRimeEngine *rime_engine,
+   if (status &&
+       rime_engine->status.is_disabled == status->is_disabled &&
+       rime_engine->status.is_ascii_mode == status->is_ascii_mode &&
++      rime_engine->status.is_temp_ascii == status->is_temp_ascii &&
+       rime_engine->status.schema_id && status->schema_id &&
+       !strcmp(rime_engine->status.schema_id, status->schema_id)) {
+     // no updates
+@@ -232,6 +233,7 @@ static void ibus_rime_update_status(IBusRimeEngine *rime_engine,
+ 
+   rime_engine->status.is_disabled = status ? status->is_disabled : False;
+   rime_engine->status.is_ascii_mode = status ? status->is_ascii_mode : False;
++  rime_engine->status.is_temp_ascii = status ? status->is_temp_ascii : False;
+   if (rime_engine->status.schema_id) {
+     g_free(rime_engine->status.schema_id);
+   }
+@@ -246,6 +248,10 @@ static void ibus_rime_update_status(IBusRimeEngine *rime_engine,
+       icon = IBUS_RIME_ICONS_DIR "/disabled.png";
+       label = ibus_text_new_from_static_string("維護");
+     }
++    else if (status->is_temp_ascii) {
++      icon = IBUS_RIME_ICONS_DIR "/abc.png";
++      label = ibus_text_new_from_static_string("Insert");
++    }
+     else if (status->is_ascii_mode) {
+       icon = IBUS_RIME_ICONS_DIR "/abc.png";
+       label = ibus_text_new_from_static_string("Abc");

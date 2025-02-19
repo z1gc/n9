@@ -1,0 +1,115 @@
+From b3320c50cb0c74bcc7f0dade450c1660fd09b241 Mon Sep 17 00:00:00 2001
+From: Zigit Zo <ptr@ffi.fyi>
+Date: Mon, 6 Jan 2025 13:45:55 +0800
+Subject: [PATCH] hack(openssh): V_9_9_P1
+
+---
+ readconf.c    | 10 +++++++++-
+ readconf.h    |  1 +
+ sshconnect2.c | 18 +++++++++++++-----
+ 3 files changed, 23 insertions(+), 6 deletions(-)
+
+diff --git a/readconf.c b/readconf.c
+index 3d9cc6dbbe4a..02d37dbe4b12 100644
+--- a/readconf.c
++++ b/readconf.c
+@@ -152,7 +152,7 @@ typedef enum {
+ 	oIdentityFile, oHostname, oPort, oRemoteForward, oLocalForward,
+ 	oPermitRemoteOpen,
+ 	oCertificateFile, oAddKeysToAgent, oIdentityAgent,
+-	oUser, oEscapeChar, oProxyCommand,
++	oUser, oPlainPass, oEscapeChar, oProxyCommand,
+ 	oGlobalKnownHostsFile, oUserKnownHostsFile, oConnectionAttempts,
+ 	oBatchMode, oCheckHostIP, oStrictHostKeyChecking, oCompression,
+ 	oTCPKeepAlive, oNumberOfPasswordPrompts,
+@@ -255,6 +255,7 @@ static struct {
+ 	{ "localforward", oLocalForward },
+ 	{ "permitremoteopen", oPermitRemoteOpen },
+ 	{ "user", oUser },
++	{ "plainpass", oPlainPass },
+ 	{ "host", oHost },
+ 	{ "match", oMatch },
+ 	{ "tag", oTag },
+@@ -1386,6 +1387,10 @@ process_config_line_depth(Options *options, struct passwd *pw, const char *host,
+ 			*charptr = xstrdup(arg);
+ 		break;
+ 
++	case oPlainPass:
++		charptr = &options->plainpass;
++		goto parse_string;
++
+ 	case oGlobalKnownHostsFile:
+ 		cpptr = (char **)&options->system_hostfiles;
+ 		uintptr = &options->num_system_hostfiles;
+@@ -2608,6 +2613,7 @@ initialize_options(Options * options)
+ 	options->jump_port = -1;
+ 	options->jump_extra = NULL;
+ 	options->user = NULL;
++	options->plainpass = NULL;
+ 	options->escape_char = -1;
+ 	options->num_system_hostfiles = 0;
+ 	options->num_user_hostfiles = 0;
+@@ -3006,6 +3012,7 @@ free_options(Options *o)
+ 	free(o->host_key_alias);
+ 	free(o->proxy_command);
+ 	free(o->user);
++	free(o->plainpass);
+ 	FREE_ARRAY(u_int, o->num_system_hostfiles, o->system_hostfiles);
+ 	FREE_ARRAY(u_int, o->num_user_hostfiles, o->user_hostfiles);
+ 	free(o->preferred_authentications);
+@@ -3547,6 +3554,7 @@ dump_client_config(Options *o, const char *host)
+ 	/* Most interesting options first: user, host, port */
+ 	dump_cfg_string(oHost, o->host_arg);
+ 	dump_cfg_string(oUser, o->user);
++	dump_cfg_string(oPlainPass, o->plainpass);
+ 	dump_cfg_string(oHostname, host);
+ 	dump_cfg_int(oPort, o->port);
+ 
+diff --git a/readconf.h b/readconf.h
+index 9447d5d6e53d..1c8ae929facb 100644
+--- a/readconf.h
++++ b/readconf.h
+@@ -74,6 +74,7 @@ typedef struct {
+ 	char   *host_key_alias;	/* hostname alias for .ssh/known_hosts */
+ 	char   *proxy_command;	/* Proxy command for connecting the host. */
+ 	char   *user;		/* User to log in as. */
++	char   *plainpass; /* Plain password used in keyboard. For dev machine only! */
+ 	int     escape_char;	/* Escape character; -2 = none */
+ 
+ 	u_int	num_system_hostfiles;	/* Paths for /etc/ssh/ssh_known_hosts */
+diff --git a/sshconnect2.c b/sshconnect2.c
+index 11fcdea8aff1..76d62ad08b79 100644
+--- a/sshconnect2.c
++++ b/sshconnect2.c
+@@ -1043,8 +1043,14 @@ userauth_passwd(struct ssh *ssh)
+ 	if (authctxt->attempt_passwd != 1)
+ 		error("Permission denied, please try again.");
+ 
+-	xasprintf(&prompt, "%s@%s's password: ", authctxt->server_user, host);
+-	password = read_passphrase(prompt, 0);
++	if (options.plainpass) {
++		password = options.plainpass;
++	}
++	else {
++		xasprintf(&prompt, "%s@%s's password: ", authctxt->server_user, host);
++		password = read_passphrase(prompt, 0);
++	}
++
+ 	if ((r = sshpkt_start(ssh, SSH2_MSG_USERAUTH_REQUEST)) != 0 ||
+ 	    (r = sshpkt_put_cstring(ssh, authctxt->server_user)) != 0 ||
+ 	    (r = sshpkt_put_cstring(ssh, authctxt->service)) != 0 ||
+@@ -1055,9 +1061,11 @@ userauth_passwd(struct ssh *ssh)
+ 	    (r = sshpkt_send(ssh)) != 0)
+ 		fatal_fr(r, "send packet");
+ 
+-	free(prompt);
+-	if (password != NULL)
+-		freezero(password, strlen(password));
++	if (!options.plainpass) {
++		free(prompt);
++		if (password != NULL)
++			freezero(password, strlen(password));
++	}
+ 
+ 	ssh_dispatch_set(ssh, SSH2_MSG_USERAUTH_PASSWD_CHANGEREQ,
+ 	    &input_userauth_passwd_changereq);

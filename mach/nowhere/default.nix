@@ -6,6 +6,18 @@
     modules = with n9.lib.nixos-modules; [
       ./hardware-configuration.nix
       (disk.btrfs "/dev/vda")
+
+      # https://nixos.wiki/wiki/XMonad
+      (
+        { ... }:
+        {
+          services.xserver.windowManager.xmonad = {
+            enable = true;
+            enableContribAndExtras = true;
+            config = builtins.readFile ./xmonad.hs;
+          };
+        }
+      )
     ];
 
     # ssh -R within vm

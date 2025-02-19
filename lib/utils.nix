@@ -2,12 +2,11 @@
 
 rec {
   # A little bit clean way to add patches, and a single patch:
-  mkPatches =
-    patches: pkg: pkgs:
+  patch =
+    pkg: attr:
     pkg.overrideAttrs (prev: {
-      patches = (prev.patches or [ ]) ++ (builtins.map pkgs.fetchpatch patches);
+      patches = (prev.patches or [ ]) ++ [ attr ];
     });
-  mkPatch = patch: mkPatches [ patch ];
 
   # Turn "xyz" to pkgs.xyz (only if "xyz" is string) helper:
   attrByIfStringPath =

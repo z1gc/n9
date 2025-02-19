@@ -1,0 +1,278 @@
+commit ffa360511e0ebade66394405630da2ccca7907bd
+Author: Zigit Zo <repl@z.xas.is>
+Date:   Wed Feb 19 17:43:29 2025 +0800
+
+    Add nix sign closure before pushing (id to secret-key-files)
+
+diff --git a/src/command/apply.rs b/src/command/apply.rs
+index 33395db..1053f9b 100644
+--- a/src/command/apply.rs
++++ b/src/command/apply.rs
+@@ -55,6 +55,17 @@ The links will be created under .gcroots in the directory the Hive configuration
+         long_help = "Deactivates the progress spinner and prints every line of output."
+     )]
+     verbose: bool,
++    #[arg(
++        long,
++        help = "Sign nix store closure",
++        long_help = r#"Sign nix store closure with private key <SIGN> before pushing to the target node.
++
++When set, colmena will try to run `nix store sign` of the prof /ile.
++You may want to configure the target node to accept the public key with `nix.settings.trusted-public-keys`.
++
++This is identical to `services.nix-serve.secretKeyFile` in nix.conf, but more flexible."#
++    )]
++    sign: Option<String>,
+     #[arg(
+         long,
+         help = "Do not upload keys",
+@@ -152,6 +163,7 @@ pub async fn run(hive: Hive, opts: Opts) -> Result<(), ColmenaError> {
+                 keep_result,
+                 verbose,
+                 no_keys,
++                sign,
+                 reboot,
+                 no_substitute,
+                 no_gzip,
+@@ -194,6 +206,7 @@ pub async fn run(hive: Hive, opts: Opts) -> Result<(), ColmenaError> {
+         options.set_substituters_push(!no_substitute);
+         options.set_gzip(!no_gzip);
+         options.set_upload_keys(!no_keys);
++        options.set_sign(sign);
+         options.set_reboot(reboot);
+         options.set_force_replace_unknown_profiles(force_replace_unknown_profiles);
+         options.set_evaluator(evaluator);
+diff --git a/src/nix/deployment/mod.rs b/src/nix/deployment/mod.rs
+index 7b19dca..b4114d4 100644
+--- a/src/nix/deployment/mod.rs
++++ b/src/nix/deployment/mod.rs
+@@ -552,6 +552,12 @@ impl Deployment {
+ 
+                 let host = target.host.as_mut().unwrap();
+                 host.set_job(Some(job.clone()));
++
++                // Sign the profile if needed (only ssh push needs it now):
++                if let Some(key) = &arc_self.options.sign {
++                    host.sign_closure(push_profile.as_store_path(), key).await?;
++                }
++
+                 host.copy_closure(
+                     push_profile.as_store_path(),
+                     CopyDirection::ToRemote,
+diff --git a/src/nix/deployment/options.rs b/src/nix/deployment/options.rs
+index 936de4d..12e1e63 100644
+--- a/src/nix/deployment/options.rs
++++ b/src/nix/deployment/options.rs
+@@ -16,6 +16,10 @@ pub struct Options {
+     /// Whether to upload keys when deploying.
+     pub(super) upload_keys: bool,
+ 
++    /// Path to the sign key when deploying.
++    /// TODO: PathBuf?
++    pub(super) sign: Option<String>,
++
+     /// Whether to reboot the hosts after activation.
+     pub(super) reboot: bool,
+ 
+@@ -65,6 +69,10 @@ impl Options {
+         self.upload_keys = enable;
+     }
+ 
++    pub fn set_sign(&mut self, sign: Option<String>) {
++        self.sign = sign;
++    }
++
+     pub fn set_reboot(&mut self, enable: bool) {
+         self.reboot = enable;
+     }
+@@ -91,6 +99,7 @@ impl Options {
+         options
+             .use_substitutes(self.substituters_push)
+             .gzip(self.gzip)
++            .check_sigs(self.sign.is_some())
+     }
+ }
+ 
+@@ -100,6 +109,7 @@ impl Default for Options {
+             substituters_push: true,
+             gzip: true,
+             upload_keys: true,
++            sign: None,
+             reboot: false,
+             create_gc_roots: false,
+             force_build_on_target: None,
+diff --git a/src/nix/host/mod.rs b/src/nix/host/mod.rs
+index 8ff44ad..3a966f4 100644
+--- a/src/nix/host/mod.rs
++++ b/src/nix/host/mod.rs
+@@ -25,6 +25,7 @@ pub struct CopyOptions {
+     include_outputs: bool,
+     use_substitutes: bool,
+     gzip: bool,
++    check_sigs: bool,
+ }
+ 
+ #[derive(Clone, Debug)]
+@@ -42,6 +43,7 @@ impl Default for CopyOptions {
+             include_outputs: true,
+             use_substitutes: true,
+             gzip: true,
++            check_sigs: false,
+         }
+     }
+ }
+@@ -61,6 +63,11 @@ impl CopyOptions {
+         self.gzip = val;
+         self
+     }
++
++    pub fn check_sigs(mut self, val: bool) -> Self {
++        self.check_sigs = val;
++        self
++    }
+ }
+ 
+ impl Default for RebootOptions {
+@@ -89,6 +96,12 @@ impl RebootOptions {
+ /// The underlying implementation must be Send and Sync.
+ #[async_trait]
+ pub trait Host: Send + Sync + std::fmt::Debug {
++    /// Sign a closure if required.
++    #[allow(unused_variables)]
++    async fn sign_closure(&mut self, closure: &StorePath, key: &String) -> ColmenaResult<()> {
++        Err(ColmenaError::Unsupported)
++    }
++
+     /// Sends or receives the specified closure to the host
+     ///
+     /// The StorePath and its dependent paths will then exist on this host.
+@@ -122,27 +135,6 @@ pub trait Host: Send + Sync + std::fmt::Debug {
+         Ok(paths)
+     }
+ 
+-    /// Pushes and optionally activates a profile to the host.
+-    async fn deploy(
+-        &mut self,
+-        profile: &Profile,
+-        goal: Goal,
+-        copy_options: CopyOptions,
+-    ) -> ColmenaResult<()> {
+-        self.copy_closure(
+-            profile.as_store_path(),
+-            CopyDirection::ToRemote,
+-            copy_options,
+-        )
+-        .await?;
+-
+-        if goal.requires_activation() {
+-            self.activate(profile, goal).await?;
+-        }
+-
+-        Ok(())
+-    }
+-
+     /// Uploads a set of keys to the host.
+     ///
+     /// If `require_ownership` is false, then the ownership of a key
+diff --git a/src/nix/host/ssh.rs b/src/nix/host/ssh.rs
+index 64ebb68..1ed1cbf 100644
+--- a/src/nix/host/ssh.rs
++++ b/src/nix/host/ssh.rs
+@@ -48,6 +48,23 @@ struct BootId(String);
+ 
+ #[async_trait]
+ impl Host for Ssh {
++    async fn sign_closure(&mut self, closure: &StorePath, key: &String) -> ColmenaResult<()> {
++        let mut command = Command::new("nix");
++
++        command.args([
++            "--extra-experimental-features",
++            "nix-command",
++            "store",
++            "sign",
++            "-k",
++            key,
++            "--recursive",
++            closure.as_path().to_str().unwrap(),
++        ]);
++
++        self.run_command(command).await
++    }
++
+     async fn copy_closure(
+         &mut self,
+         closure: &StorePath,
+@@ -271,12 +288,11 @@ impl Ssh {
+             // experimental `nix copy` command with ssh-ng://
+             let mut command = Command::new("nix");
+ 
+-            command.args([
+-                "--extra-experimental-features",
+-                "nix-command",
+-                "copy",
+-                "--no-check-sigs",
+-            ]);
++            command.args(["--extra-experimental-features", "nix-command", "copy"]);
++
++            if !options.check_sigs {
++                command.arg("--no-check-sigs");
++            }
+ 
+             if options.use_substitutes {
+                 command.args([
+diff --git a/src/util.rs b/src/util.rs
+index ffbfef5..eb4abe5 100644
+--- a/src/util.rs
++++ b/src/util.rs
+@@ -1,5 +1,3 @@
+-use std::convert::TryFrom;
+-
+ use std::process::Stdio;
+ 
+ use async_trait::async_trait;
+@@ -11,7 +9,6 @@ use tokio::process::Command;
+ use super::error::{ColmenaError, ColmenaResult};
+ use super::job::JobHandle;
+ use super::nix::deployment::TargetNodeMap;
+-use super::nix::StorePath;
+ 
+ const NEWLINE: u8 = 0xa;
+ 
+@@ -37,9 +34,6 @@ pub trait CommandExt {
+     async fn capture_json<T>(&mut self) -> ColmenaResult<T>
+     where
+         T: DeserializeOwned;
+-
+-    /// Runs the command, capturing a single store path.
+-    async fn capture_store_path(&mut self) -> ColmenaResult<StorePath>;
+ }
+ 
+ impl CommandExecution {
+@@ -149,13 +143,6 @@ impl CommandExt for Command {
+             output: output.clone(),
+         })
+     }
+-
+-    /// Captures a single store path.
+-    async fn capture_store_path(&mut self) -> ColmenaResult<StorePath> {
+-        let output = self.capture_output().await?;
+-        let path = output.trim_end().to_owned();
+-        StorePath::try_from(path)
+-    }
+ }
+ 
+ #[async_trait]
+@@ -182,13 +169,6 @@ impl CommandExt for CommandExecution {
+             output: output.clone(),
+         })
+     }
+-
+-    /// Captures a single store path.
+-    async fn capture_store_path(&mut self) -> ColmenaResult<StorePath> {
+-        let output = self.capture_output().await?;
+-        let path = output.trim_end().to_owned();
+-        StorePath::try_from(path)
+-    }
+ }
+ 
+ pub async fn capture_stream<R>(

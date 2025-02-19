@@ -13,10 +13,9 @@ let
   pkgs = nixpkgs.legacyPackages.${system};
 
   # Patched of colmena:
-  colmenaPackage = utils.mkPatch {
-    url = "https://github.com/plxty/colmena/commit/f1127d3a67c148187f4dc97959075a204cd8ff9b.patch";
-    hash = "sha256-G2C9h9Ky/tzOSLB1ZA0Ltv+/9+BliPxEcKjNj/3KqaA=";
-  } colmena.packages.${system}.colmena pkgs;
+  colmenaPackage =
+    utils.patch colmena.packages.${system}.colmena
+      ../patches/colmena-nix-store-sign.patch;
 
   # The package of burn:
   burn = ''

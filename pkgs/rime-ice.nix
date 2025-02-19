@@ -7,7 +7,6 @@
   lib,
   stdenv,
   fetchFromGitHub,
-  fetchpatch,
   librime,
   ...
 }:
@@ -27,10 +26,7 @@ stdenv.mkDerivation {
   };
 
   # Can't have any 'custom' things, they should be in $XDG, uhho.
-  patches = fetchpatch {
-    url = "https://github.com/plxty/rime-ice/commit/662be70ff5acbbc0a054b096cc44dbb2fb925966.patch";
-    hash = "sha256-9xJ4gcPYpa8A9qcHzDZFDnoffQPuR7k1LqJ0Kktr33c=";
-  };
+  patches = [ ../patches/rime-ice-taste.patch ];
 
   buildInputs = [ librime ];
 

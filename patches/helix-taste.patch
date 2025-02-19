@@ -1,0 +1,1788 @@
+From 16bff48d998d01d87f41821451b852eb2a8cf627 Mon Sep 17 00:00:00 2001
+From: Zigit Zo <ptr@ffi.fyi>
+Date: Sat, 14 Dec 2024 00:40:57 +0800
+Subject: [PATCH] feat(helix): hack
+
+---
+ README.md                              |  63 ++++++++
+ helix-core/src/selection.rs            |   6 +
+ helix-loader/src/config.rs             |   3 +-
+ helix-loader/src/lib.rs                |  18 ++-
+ helix-lsp/src/client.rs                |   4 +
+ helix-lsp/src/lib.rs                   |  25 ++-
+ helix-term/src/commands.rs             | 116 +++++++++++---
+ helix-term/src/commands/lsp.rs         | 115 +++++++++++---
+ helix-term/src/commands/typed.rs       | 154 +++++++++++++++++--
+ helix-term/src/keymap.rs               |  23 ++-
+ helix-term/src/keymap/default.rs       |   6 +-
+ helix-term/src/ui/editor.rs            |   7 +-
+ helix-term/src/ui/mod.rs               |  61 +++++++-
+ helix-term/src/ui/picker.rs            | 204 +++++++++++++++----------
+ helix-term/src/ui/prompt.rs            |  11 ++
+ helix-term/src/ui/statusline.rs        |  42 +++++
+ helix-view/src/editor.rs               |  24 +++
+ helix-view/src/tree.rs                 |  34 +++++
+ runtime/queries/c/textobjects.scm      |   3 +
+ runtime/queries/python/textobjects.scm |   1 +
+ runtime/queries/rust/textobjects.scm   |   1 +
+ 21 files changed, 758 insertions(+), 163 deletions(-)
+
+diff --git a/README.md b/README.md
+index 11a909b2616f..e0d883e53073 100644
+--- a/README.md
++++ b/README.md
+@@ -30,6 +30,69 @@ All shortcuts/keymaps can be found [in the documentation on the website](https:/
+ 
+ [Troubleshooting](https://github.com/helix-editor/helix/wiki/Troubleshooting)
+ 
++# Mad Mod
++
++```bash
++HELIX_DEFAULT_RUNTIME=$PWD/runtime cargo install --profile opt --locked --path helix-term
++```
++
++* add: goto_word_definition
++  - goto_definition with goto_word jumps
++  - it will now save the jumps, C-o works
++
++* add: goto_word_reference
++  - goto_reference with goto_word jumps (two word for whole buffer)
++
++* mod: goto_reference
++  - now it shows a symbole name in it within the column's name section, a little bit ugly, but works
++  - now it shows a line as well, it might be way slower... and there's no option to turn off :!
++  - not very fast now :(
++
++* add: goto_next/prev_function_name
++  - bind to key `[n` and `]n`, to navigate to the function's name, suitable for faster `goto_reference` next
++  - TODO: textobjects.scm shall be modified for extra language, so there's lots of missing languages
++  - can use `tree-sitter parse ...` cli tools for finding the real node of the function name, and place it into textobjects
++
++* mod: global_search
++  - for register '/', the global_search will shows up the result immediatly
++  - using `Alt-k` to kill the whole string of the global_search prompt (or other prompts as well)
++  - TODO: make argument filter general for file picker as well?
++
++* fix: status message overflow issue, this will trigger by selecting a long enough sentence, and press '*' or else, seems openSUSE only
++
++* mod: symbol_picker
++  - make LSP support `hierarchicalDocumentSymbolSupport`, and shows the full name with signature
++  - TODO: the `workspace/symbol` request seems has no hierarchical symbols
++
++* add: focus_N
++  - inspired by ace-window, can now use `:focus X` to focus the window numbered by X
++  - each window (or view in helix term), has a little sign about it's number at bottom left status line
++  - the window is always sorted by the position (x then y)
++  - alternative functions `:focus_insert X` to focus the window, and then enter the insert state
++
++* add: search
++  - three options `search.case_sensitive`, `search.whole_word` and `search.regex`
++  - add the statusline for the search_config, `r` for regex, `c` for case sensitive, and `w` for whole word search
++  - if you add `:toggle-option` to your config file for quick toggling, now it will shows the current's value
++
++* mod: search_selection
++  - now it selects a whole word in the beginning
++  - if you want to keep the original behavior, use `1*` (or any other number)
++
++* add: format-write
++  - use `:m` and `:m!` to format then write (mrite)
++
++* add: global config file
++  - support `/etc/helix/config.toml` and `/etc/helix/languages.toml`
++
++* add: insert_raw_tab
++  - it inserts a real tab now!
++
++* add: command `E` and `O`
++  - they will now edit or open file in the current buffer's directory
++
++Many of the changes is commited arbitrarily, so I squashed them into just single commit.
++
+ # Features
+ 
+ - Vim-like modal editing
+diff --git a/helix-core/src/selection.rs b/helix-core/src/selection.rs
+index 76de63628d1e..846fa46a02c9 100644
+--- a/helix-core/src/selection.rs
++++ b/helix-core/src/selection.rs
+@@ -527,6 +527,12 @@ impl Selection {
+         self.ranges.iter().map(|&range| range.into())
+     }
+ 
++    pub fn is_single_grapheme(&self, text: RopeSlice) -> bool {
++        self.ranges()
++            .get(0)
++            .is_some_and(|r| r.is_single_grapheme(text))
++    }
++
+     pub fn primary_index(&self) -> usize {
+         self.primary_index
+     }
+diff --git a/helix-loader/src/config.rs b/helix-loader/src/config.rs
+index d092d20f73a8..832c3b193512 100644
+--- a/helix-loader/src/config.rs
++++ b/helix-loader/src/config.rs
+@@ -1,4 +1,4 @@
+-use std::str::from_utf8;
++use std::{path::PathBuf, str::from_utf8};
+ 
+ /// Default built-in languages.toml.
+ pub fn default_lang_config() -> toml::Value {
+@@ -10,6 +10,7 @@ pub fn default_lang_config() -> toml::Value {
+ /// User configured languages.toml file, merged with the default config.
+ pub fn user_lang_config() -> Result<toml::Value, toml::de::Error> {
+     let config = [
++        PathBuf::from("/etc/helix"),
+         crate::config_dir(),
+         crate::find_workspace().0.join(".helix"),
+     ]
+diff --git a/helix-loader/src/lib.rs b/helix-loader/src/lib.rs
+index 0e7c134d013e..d83b1a4c1f80 100644
+--- a/helix-loader/src/lib.rs
++++ b/helix-loader/src/lib.rs
+@@ -16,6 +16,10 @@ static CONFIG_FILE: once_cell::sync::OnceCell<PathBuf> = once_cell::sync::OnceCe
+ static LOG_FILE: once_cell::sync::OnceCell<PathBuf> = once_cell::sync::OnceCell::new();
+ 
+ pub fn initialize_config_file(specified_file: Option<PathBuf>) {
++    // Order:
++    // 1. Argument config file,
++    // 2. Global config file in /etc/helix,
++    // 3. Local config file.
+     let config_file = specified_file.unwrap_or_else(default_config_file);
+     ensure_parent_dir(&config_file);
+     CONFIG_FILE.set(config_file).ok();
+@@ -145,7 +149,12 @@ pub fn workspace_config_file() -> PathBuf {
+ }
+ 
+ pub fn lang_config_file() -> PathBuf {
+-    config_dir().join("languages.toml")
++    let system_config = PathBuf::from("/etc/helix/languages.toml");
++    if system_config.exists() {
++        system_config
++    } else {
++        config_dir().join("languages.toml")
++    }
+ }
+ 
+ pub fn default_log_file() -> PathBuf {
+@@ -244,7 +253,12 @@ pub fn find_workspace() -> (PathBuf, bool) {
+ }
+ 
+ fn default_config_file() -> PathBuf {
+-    config_dir().join("config.toml")
++    let system_config = PathBuf::from("/etc/helix/config.toml");
++    if system_config.exists() {
++        system_config
++    } else {
++        config_dir().join("config.toml")
++    }
+ }
+ 
+ fn ensure_parent_dir(path: &Path) {
+diff --git a/helix-lsp/src/client.rs b/helix-lsp/src/client.rs
+index cc1c4ce8fe67..4b750c746252 100644
+--- a/helix-lsp/src/client.rs
++++ b/helix-lsp/src/client.rs
+@@ -661,6 +661,10 @@ impl Client {
+                         dynamic_registration: Some(false),
+                         resolve_support: None,
+                     }),
++                    document_symbol: Some(lsp::DocumentSymbolClientCapabilities {
++                        hierarchical_document_symbol_support: Some(true),
++                        ..Default::default()
++                    }),
+                     ..Default::default()
+                 }),
+                 window: Some(lsp::WindowClientCapabilities {
+diff --git a/helix-lsp/src/lib.rs b/helix-lsp/src/lib.rs
+index fd5cdb8b37ff..0fcc03e1e4f8 100644
+--- a/helix-lsp/src/lib.rs
++++ b/helix-lsp/src/lib.rs
+@@ -126,21 +126,18 @@ pub mod util {
+         }
+     }
+ 
+-    /// Converts [`lsp::Position`] to a position in the document.
+-    ///
+-    /// Returns `None` if position.line is out of bounds or an overflow occurs
+-    pub fn lsp_pos_to_pos(
++    pub fn lsp_pos_to_line(
+         doc: &Rope,
+         pos: lsp::Position,
+         offset_encoding: OffsetEncoding,
+-    ) -> Option<usize> {
++    ) -> Option<std::ops::Range<usize>> {
+         let pos_line = pos.line as usize;
+         if pos_line > doc.len_lines() - 1 {
+             // If it extends past the end, truncate it to the end. This is because the
+             // way the LSP describes the range including the last newline is by
+             // specifying a line number after what we would call the last line.
+             log::warn!("LSP position {pos:?} out of range assuming EOF");
+-            return Some(doc.len_chars());
++            return None;
+         }
+ 
+         // We need to be careful here to fully comply ith the LSP spec.
+@@ -189,6 +186,22 @@ pub mod util {
+             }
+         };
+ 
++        Some(line)
++    }
++
++    /// Converts [`lsp::Position`] to a position in the document.
++    ///
++    /// Returns `None` if position.line is out of bounds or an overflow occurs
++    pub fn lsp_pos_to_pos(
++        doc: &Rope,
++        pos: lsp::Position,
++        offset_encoding: OffsetEncoding,
++    ) -> Option<usize> {
++        let line = match lsp_pos_to_line(doc, pos, offset_encoding) {
++            Some(line) => line,
++            None => return Some(doc.len_chars()),
++        };
++
+         // The LSP spec demands that the offset is capped to the end of the line
+         let pos = line
+             .start
+diff --git a/helix-term/src/commands.rs b/helix-term/src/commands.rs
+index a93fa445ee80..e0e0c5d9429d 100644
+--- a/helix-term/src/commands.rs
++++ b/helix-term/src/commands.rs
+@@ -59,7 +59,10 @@ use crate::{
+     compositor::{self, Component, Compositor},
+     filter_picker_entry,
+     job::Callback,
+-    ui::{self, overlay::overlaid, Picker, PickerColumn, Popup, Prompt, PromptEvent},
++    ui::{
++        self, overlay::overlaid, transform_search_query, Picker, PickerColumn, Popup, Prompt,
++        PromptEvent,
++    },
+ };
+ 
+ use crate::job::{self, Jobs};
+@@ -452,6 +455,7 @@ impl MappableCommand {
+         signature_help, "Show signature help",
+         smart_tab, "Insert tab if all cursors have all whitespace to their left; otherwise, run a separate command.",
+         insert_tab, "Insert tab char",
++        insert_raw_tab, "Insert the real tab char",
+         insert_newline, "Insert newline char",
+         delete_char_backward, "Delete previous char",
+         delete_char_forward, "Delete next char",
+@@ -543,6 +547,8 @@ impl MappableCommand {
+         select_textobject_inner, "Select inside object",
+         goto_next_function, "Goto next function",
+         goto_prev_function, "Goto previous function",
++        goto_next_function_name, "Goto next function name",
++        goto_prev_function_name, "Goto previous function name",
+         goto_next_class, "Goto next type definition",
+         goto_prev_class, "Goto previous type definition",
+         goto_next_parameter, "Goto next parameter",
+@@ -587,6 +593,8 @@ impl MappableCommand {
+         extend_to_word, "Extend to a two-character label",
+         goto_next_tabstop, "goto next snippet placeholder",
+         goto_prev_tabstop, "goto next snippet placeholder",
++        goto_word_definition, "Definition of a two-character label",
++        goto_word_reference, "Reference of a two-character label",
+     );
+ }
+ 
+@@ -1175,7 +1183,16 @@ fn move_prev_word_end(cx: &mut Context) {
+ }
+ 
+ fn move_next_word_end(cx: &mut Context) {
+-    move_word_impl(cx, movement::move_next_word_end)
++    // https://github.com/helix-editor/helix/discussions/10266
++    // FIXME: Boundary issue? Workaround currently:
++    let mode = cx.editor.mode;
++    move_word_impl(cx, |text, range, count| {
++        let mut selection = movement::move_next_word_end(text, range, count);
++        if mode == Mode::Insert {
++            selection.head += 1
++        }
++        selection
++    })
+ }
+ 
+ fn move_next_long_word_start(cx: &mut Context) {
+@@ -2214,11 +2231,8 @@ fn search_next_or_prev_impl(cx: &mut Context, movement: Movement, direction: Dir
+     let scrolloff = config.scrolloff;
+     if let Some(query) = cx.editor.registers.first(register, cx.editor) {
+         let search_config = &config.search;
+-        let case_insensitive = if search_config.smart_case {
+-            !query.chars().any(char::is_uppercase)
+-        } else {
+-            false
+-        };
++        let (query, case_insensitive) = transform_search_query(search_config, query.as_ref());
++
+         let wrap_around = search_config.wrap_around;
+         if let Ok(regex) = rope::RegexBuilder::new()
+             .syntax(
+@@ -2270,6 +2284,10 @@ fn search_selection_detect_word_boundaries(cx: &mut Context) {
+ }
+ 
+ fn search_selection_impl(cx: &mut Context, detect_word_boundaries: bool) {
++    if cx.count.is_none() {
++        do_expand_selection(cx.editor, true);
++    }
++
+     fn is_at_word_start(text: RopeSlice, index: usize) -> bool {
+         let ch = text.char(index);
+         if index == 0 {
+@@ -2382,13 +2400,14 @@ fn global_search(cx: &mut Context) {
+     }
+ 
+     struct GlobalSearchConfig {
+-        smart_case: bool,
++        search_config: helix_view::editor::SearchConfig,
+         file_picker_config: helix_view::editor::FilePickerConfig,
+     }
+ 
++    // TODO: try to avoid copy with Rc or else?
+     let config = cx.editor.config();
+     let config = GlobalSearchConfig {
+-        smart_case: config.search.smart_case,
++        search_config: config.search.clone(),
+         file_picker_config: config.file_picker.clone(),
+     };
+ 
+@@ -2419,9 +2438,11 @@ fn global_search(cx: &mut Context) {
+             .map(|doc| (doc.path().cloned(), doc.text().to_owned()))
+             .collect();
+ 
++        // TODO: better smart-case?
++        let (query, case_insensitive) = transform_search_query(&config.search_config, query);
+         let matcher = match RegexMatcherBuilder::new()
+-            .case_smart(config.smart_case)
+-            .build(query)
++            .case_insensitive(case_insensitive)
++            .build(query.as_ref())
+         {
+             Ok(matcher) => {
+                 // Clear any "Failed to compile regex" errors out of the statusline.
+@@ -2564,7 +2585,7 @@ fn global_search(cx: &mut Context) {
+     .with_preview(|_editor, FileResult { path, line_num, .. }| {
+         Some((path.as_path().into(), Some((*line_num, *line_num))))
+     })
+-    .with_history_register(Some(reg))
++    .with_history_register(Some(reg), cx.editor)
+     .with_dynamic_query(get_files, Some(275));
+ 
+     cx.push_layer(Box::new(overlaid(picker)));
+@@ -2959,11 +2980,7 @@ fn file_picker(cx: &mut Context) {
+ }
+ 
+ fn file_picker_in_current_buffer_directory(cx: &mut Context) {
+-    let doc_dir = doc!(cx.editor)
+-        .path()
+-        .and_then(|path| path.parent().map(|path| path.to_path_buf()));
+-
+-    let path = match doc_dir {
++    let path = match cx.editor.current_buffer_directory() {
+         Some(path) => path,
+         None => {
+             cx.editor.set_error("current buffer has no path or parent");
+@@ -3976,6 +3993,18 @@ pub mod insert {
+         doc.apply(&transaction, view.id);
+     }
+ 
++    pub fn insert_raw_tab(cx: &mut Context) {
++        let (view, doc) = current!(cx.editor);
++
++        // Force to be a real tab:
++        let transaction = Transaction::insert(
++            doc.text(),
++            &doc.selection(view.id).clone().cursors(doc.text().slice(..)),
++            Tendril::from("\t"),
++        );
++        doc.apply(&transaction, view.id);
++    }
++
+     pub fn insert_newline(cx: &mut Context) {
+         let (view, doc) = current_ref!(cx.editor);
+         let text = doc.text().slice(..);
+@@ -5123,14 +5152,18 @@ fn reverse_selection_contents(cx: &mut Context) {
+ 
+ // tree sitter node selection
+ 
+-fn expand_selection(cx: &mut Context) {
+-    let motion = |editor: &mut Editor| {
++fn do_expand_selection(editor: &mut Editor, skip_if_selected: bool) {
++    if true {
+         let (view, doc) = current!(editor);
+ 
+         if let Some(syntax) = doc.syntax() {
+             let text = doc.text().slice(..);
+ 
+             let current_selection = doc.selection(view.id);
++            if skip_if_selected && !current_selection.is_single_grapheme(text) {
++                return;
++            }
++
+             let selection = object::expand_selection(syntax, text, current_selection.clone());
+ 
+             // check if selection is different from the last one
+@@ -5142,7 +5175,11 @@ fn expand_selection(cx: &mut Context) {
+             }
+         }
+     };
+-    cx.editor.apply_motion(motion);
++}
++
++fn expand_selection(cx: &mut Context) {
++    cx.editor
++        .apply_motion(|editor: &mut Editor| do_expand_selection(editor, false));
+ }
+ 
+ fn shrink_selection(cx: &mut Context) {
+@@ -5565,6 +5602,14 @@ fn goto_prev_function(cx: &mut Context) {
+     goto_ts_object_impl(cx, "function", Direction::Backward)
+ }
+ 
++fn goto_next_function_name(cx: &mut Context) {
++    goto_ts_object_impl(cx, "function_name", Direction::Forward)
++}
++
++fn goto_prev_function_name(cx: &mut Context) {
++    goto_ts_object_impl(cx, "function_name", Direction::Backward)
++}
++
+ fn goto_next_class(cx: &mut Context) {
+     goto_ts_object_impl(cx, "class", Direction::Forward)
+ }
+@@ -6343,14 +6388,27 @@ fn replay_macro(cx: &mut Context) {
+ }
+ 
+ fn goto_word(cx: &mut Context) {
+-    jump_to_word(cx, Movement::Move)
++    jump_to_word(cx, Movement::Move, None)
+ }
+ 
+ fn extend_to_word(cx: &mut Context) {
+-    jump_to_word(cx, Movement::Extend)
++    jump_to_word(cx, Movement::Extend, None)
++}
++
++fn goto_word_reference(cx: &mut Context) {
++    jump_to_word(cx, Movement::Move, Some(goto_reference))
++}
++
++fn goto_word_definition(cx: &mut Context) {
++    jump_to_word(cx, Movement::Move, Some(goto_definition))
+ }
+ 
+-fn jump_to_label(cx: &mut Context, labels: Vec<Range>, behaviour: Movement) {
++fn jump_to_label(
++    cx: &mut Context,
++    labels: Vec<Range>,
++    behaviour: Movement,
++    do_next: Option<fn(&mut Context)>,
++) {
+     let doc = doc!(cx.editor);
+     let alphabet = &cx.editor.config().jump_label_alphabet;
+     if labels.is_empty() {
+@@ -6429,15 +6487,23 @@ fn jump_to_label(cx: &mut Context, labels: Vec<Range>, behaviour: Movement) {
+                     };
+                     Range::new(anchor, range.head)
+                 } else {
++                    // Movement, save to jumplist before we jump
++                    let (view, doc) = current!(cx.editor);
++                    push_jump(view, doc);
++
+                     range.with_direction(Direction::Forward)
+                 };
+                 doc_mut!(cx.editor, &doc).set_selection(view, range.into());
++
++                if let Some(func) = do_next {
++                    func(cx);
++                }
+             }
+         });
+     });
+ }
+ 
+-fn jump_to_word(cx: &mut Context, behaviour: Movement) {
++fn jump_to_word(cx: &mut Context, behaviour: Movement, do_next: Option<fn(&mut Context)>) {
+     // Calculate the jump candidates: ranges for any visible words with two or
+     // more characters.
+     let alphabet = &cx.editor.config().jump_label_alphabet;
+@@ -6524,5 +6590,5 @@ fn jump_to_word(cx: &mut Context, behaviour: Movement) {
+             break;
+         }
+     }
+-    jump_to_label(cx, words, behaviour)
++    jump_to_label(cx, words, behaviour, do_next)
+ }
+diff --git a/helix-term/src/commands/lsp.rs b/helix-term/src/commands/lsp.rs
+index fcc0333e8cd8..1cd53cfb894c 100644
+--- a/helix-term/src/commands/lsp.rs
++++ b/helix-term/src/commands/lsp.rs
+@@ -5,7 +5,7 @@ use helix_lsp::{
+         self, CodeAction, CodeActionOrCommand, CodeActionTriggerKind, DiagnosticSeverity,
+         NumberOrString,
+     },
+-    util::{diagnostic_to_lsp_diagnostic, lsp_range_to_range, range_to_lsp_range},
++    util::{diagnostic_to_lsp_diagnostic, lsp_pos_to_line, lsp_range_to_range, range_to_lsp_range},
+     Client, LanguageServerId, OffsetEncoding,
+ };
+ use tokio_stream::StreamExt;
+@@ -28,7 +28,10 @@ use helix_view::{
+ use crate::{
+     compositor::{self, Compositor},
+     job::Callback,
+-    ui::{self, overlay::overlaid, FileLocation, Picker, Popup, PromptEvent},
++    ui::{
++        self, overlay::overlaid, picker::DocumentPreviewCache, FileLocation, Picker, Popup,
++        PromptEvent,
++    },
+ };
+ 
+ use std::{
+@@ -85,6 +88,7 @@ fn lsp_location_to_location(location: lsp::Location) -> Option<Location> {
+ struct SymbolInformationItem {
+     location: Location,
+     symbol: lsp::SymbolInformation,
++    signature: Option<String>,
+     offset_encoding: OffsetEncoding,
+ }
+ 
+@@ -303,17 +307,26 @@ pub fn symbol_picker(cx: &mut Context) {
+         uri: &Uri,
+         symbol: lsp::DocumentSymbol,
+         offset_encoding: OffsetEncoding,
++        prefix: &str,
+     ) {
++        // TODO: &mut String for performance? with push/pop
++        let mut name = prefix.to_string();
++        if !name.is_empty() {
++            name.push_str("::"); // cpp style
++        }
++        name.push_str(symbol.name.as_str());
++
+         #[allow(deprecated)]
+         list.push(SymbolInformationItem {
+             symbol: lsp::SymbolInformation {
+-                name: symbol.name,
++                name: name.clone(),
+                 kind: symbol.kind,
+                 tags: symbol.tags,
+                 deprecated: symbol.deprecated,
+                 location: lsp::Location::new(file.uri.clone(), symbol.selection_range),
+                 container_name: None,
+             },
++            signature: symbol.detail,
+             offset_encoding,
+             location: Location {
+                 uri: uri.clone(),
+@@ -321,7 +334,7 @@ pub fn symbol_picker(cx: &mut Context) {
+             },
+         });
+         for child in symbol.children.into_iter().flatten() {
+-            nested_to_flat(list, file, uri, child, offset_encoding);
++            nested_to_flat(list, file, uri, child, offset_encoding, name.as_str());
+         }
+     }
+     let doc = doc!(cx.editor);
+@@ -357,9 +370,11 @@ pub fn symbol_picker(cx: &mut Context) {
+                                 range: symbol.location.range,
+                             },
+                             symbol,
++                            signature: None,
+                             offset_encoding,
+                         })
+                         .collect(),
++                    // for rust-analyzer: `snap.config.hierarchical_symbols` must be enabled
+                     lsp::DocumentSymbolResponse::Nested(symbols) => {
+                         let mut flat_symbols = Vec::new();
+                         for symbol in symbols {
+@@ -369,6 +384,7 @@ pub fn symbol_picker(cx: &mut Context) {
+                                 &doc_uri,
+                                 symbol,
+                                 offset_encoding,
++                                "",
+                             )
+                         }
+                         flat_symbols
+@@ -402,6 +418,14 @@ pub fn symbol_picker(cx: &mut Context) {
+                 ui::PickerColumn::new("name", |item: &SymbolInformationItem, _| {
+                     item.symbol.name.as_str().into()
+                 }),
++                // Signature of the symbol
++                ui::PickerColumn::new("signature", |item: &SymbolInformationItem, _| {
++                    if let Some(ref signature) = item.signature {
++                        signature.to_string().into()
++                    } else {
++                        "".into()
++                    }
++                }),
+             ];
+ 
+             let picker = Picker::new(
+@@ -469,6 +493,7 @@ pub fn workspace_symbol_picker(cx: &mut Context) {
+                                         range: symbol.location.range,
+                                     },
+                                     symbol,
++                                    signature: None,
+                                     offset_encoding,
+                                 })
+                             })
+@@ -867,23 +892,75 @@ fn goto_impl(
+         }
+         [] => unreachable!("`locations` should be non-empty for `goto_impl`"),
+         _locations => {
+-            let columns = [ui::PickerColumn::new(
+-                "location",
+-                |item: &Location, cwdir: &std::path::PathBuf| {
+-                    let path = if let Some(path) = item.uri.as_path() {
+-                        path.strip_prefix(cwdir).unwrap_or(path).to_string_lossy()
+-                    } else {
+-                        item.uri.to_string().into()
+-                    };
++            // Manage the preview cache ourselves to speed up a little:
++            let mut preview_cache = DocumentPreviewCache::new();
+ 
+-                    format!("{path}:{}", item.range.start.line + 1).into()
+-                },
+-            )];
++            // [Location] -> [(Location, Line?)]
++            let locations = locations
++                .iter()
++                .map(|loc| {
++                    let line = loc.uri.as_path().and_then(|path| {
++                        let preview = preview_cache.get_preview(path, editor);
++                        let doc = preview.document()?;
++
++                        // Extract all the relative lines, we do it here for avoiding Sync:
++                        let range = lsp_pos_to_line(doc.text(), loc.range.start, offset_encoding)?;
++                        Some(doc.text().get_slice(range)?.to_string())
++                    });
++
++                    // TODO: Avoid clone?
++                    (loc.clone(), line)
++                })
++                .collect::<Vec<_>>(); // TODO: Avoid collecting, just the iterator?
+ 
+-            let picker = Picker::new(columns, 0, locations, cwdir, move |cx, location, action| {
+-                jump_to_location(cx.editor, location, offset_encoding, action)
+-            })
+-            .with_preview(move |_editor, location| location_to_file_location(location));
++            // Extract symbol name from better displaying, any of it is fine:
++            let symbol_name = locations.iter().find_map(|(loc, _)| {
++                // TODO: Reuse range and line:
++                let path = loc.uri.as_path()?;
++                let preview = preview_cache.get_preview(path, editor);
++                let doc = preview.document()?;
++
++                let range = lsp_range_to_range(doc.text(), loc.range, offset_encoding)?;
++                Some(doc.text().get_slice(range.anchor..range.head)?.to_string())
++            });
++
++            let columns = [
++                ui::PickerColumn::new(
++                    symbol_name.unwrap_or_else(|| "location".to_string()),
++                    |(item, _): &(Location, Option<String>), cwdir: &std::path::PathBuf| {
++                        let path = if let Some(path) = item.uri.as_path() {
++                            path.strip_prefix(cwdir).unwrap_or(path).to_string_lossy()
++                        } else {
++                            item.uri.to_string().into()
++                        };
++
++                        format!("{path}:{}", item.range.start.line + 1).into()
++                    },
++                ),
++                ui::PickerColumn::new(
++                    "l1n3",
++                    |(_, line): &(Location, Option<String>), _: &std::path::PathBuf| {
++                        // TODO: Avoid deep copy... Seems hard:
++                        if let Some(line) = line {
++                            line.trim().into()
++                        } else {
++                            String::new().into()
++                        }
++                    },
++                ),
++            ];
++
++            let picker = Picker::new(
++                columns,
++                0,
++                locations,
++                cwdir,
++                move |cx, (location, _), action| {
++                    jump_to_location(cx.editor, location, offset_encoding, action)
++                },
++            )
++            .with_cached_previews(preview_cache)
++            .with_preview(move |_editor, (location, _)| location_to_file_location(location));
+             compositor.push(Box::new(overlaid(picker)));
+         }
+     }
+diff --git a/helix-term/src/commands/typed.rs b/helix-term/src/commands/typed.rs
+index c21743d0823a..a11f7ba5f0cb 100644
+--- a/helix-term/src/commands/typed.rs
++++ b/helix-term/src/commands/typed.rs
+@@ -139,6 +139,32 @@ fn open(cx: &mut compositor::Context, args: &[Cow<str>], event: PromptEvent) ->
+     Ok(())
+ }
+ 
++fn open_in_current(
++    cx: &mut compositor::Context,
++    args: &[Cow<str>],
++    event: PromptEvent,
++) -> anyhow::Result<()> {
++    if event != PromptEvent::Validate {
++        return Ok(());
++    }
++
++    ensure!(!args.is_empty(), "wrong argument count");
++
++    let doc_dir = match cx.editor.current_buffer_directory() {
++        Some(p) => p,
++        None => bail!("current buffer has no path or parent"),
++    };
++    let doc_dir = doc_dir.to_string_lossy();
++
++    // Transform all arguments, performance may be poor, but doesn't matter:
++    let args = args
++        .iter()
++        .map(|a| Cow::from(format!("{doc_dir}/{a}")))
++        .collect::<Vec<_>>();
++
++    open(cx, &args[..], event)
++}
++
+ fn buffer_close_by_ids_impl(
+     cx: &mut compositor::Context,
+     doc_ids: &[DocumentId],
+@@ -333,12 +359,14 @@ fn write_impl(
+     cx: &mut compositor::Context,
+     path: Option<&Cow<str>>,
+     force: bool,
++    format: bool,
+ ) -> anyhow::Result<()> {
+     let config = cx.editor.config();
+     let jobs = &mut cx.jobs;
+     let (view, doc) = current!(cx.editor);
+     let path = path.map(AsRef::as_ref);
+ 
++    // TODO: don't insert the newline if the user deleted it...
+     if config.insert_final_newline {
+         insert_final_newline(doc, view.id);
+     }
+@@ -346,8 +374,16 @@ fn write_impl(
+     // Save an undo checkpoint for any outstanding changes.
+     doc.append_changes_to_history(view);
+ 
+-    let fmt = if config.auto_format {
+-        doc.auto_format().map(|fmt| {
++    let fmt = if format {
++        doc.format()
++    } else if config.auto_format {
++        doc.auto_format()
++    } else {
++        None
++    };
++
++    if let Some(fmt) = fmt {
++        if true {
+             let callback = make_format_callback(
+                 doc.id(),
+                 doc.version(),
+@@ -357,12 +393,8 @@ fn write_impl(
+             );
+ 
+             jobs.add(Job::with_callback(callback).wait_before_exiting());
+-        })
++        }
+     } else {
+-        None
+-    };
+-
+-    if fmt.is_none() {
+         let id = doc.id();
+         cx.editor.save(id, path, force)?;
+     }
+@@ -388,7 +420,7 @@ fn write(
+         return Ok(());
+     }
+ 
+-    write_impl(cx, args.first(), false)
++    write_impl(cx, args.first(), false, false)
+ }
+ 
+ fn force_write(
+@@ -400,7 +432,7 @@ fn force_write(
+         return Ok(());
+     }
+ 
+-    write_impl(cx, args.first(), true)
++    write_impl(cx, args.first(), true, false)
+ }
+ 
+ fn write_buffer_close(
+@@ -412,7 +444,7 @@ fn write_buffer_close(
+         return Ok(());
+     }
+ 
+-    write_impl(cx, args.first(), false)?;
++    write_impl(cx, args.first(), false, false)?;
+ 
+     let document_ids = buffer_gather_paths_impl(cx.editor, args);
+     buffer_close_by_ids_impl(cx, &document_ids, false)
+@@ -427,7 +459,7 @@ fn force_write_buffer_close(
+         return Ok(());
+     }
+ 
+-    write_impl(cx, args.first(), true)?;
++    write_impl(cx, args.first(), true, false)?;
+ 
+     let document_ids = buffer_gather_paths_impl(cx.editor, args);
+     buffer_close_by_ids_impl(cx, &document_ids, false)
+@@ -466,6 +498,30 @@ fn format(
+     Ok(())
+ }
+ 
++fn format_write(
++    cx: &mut compositor::Context,
++    args: &[Cow<str>],
++    event: PromptEvent,
++) -> anyhow::Result<()> {
++    if event != PromptEvent::Validate {
++        return Ok(());
++    }
++
++    write_impl(cx, args.first(), false, true)
++}
++
++fn format_write_force(
++    cx: &mut compositor::Context,
++    args: &[Cow<str>],
++    event: PromptEvent,
++) -> anyhow::Result<()> {
++    if event != PromptEvent::Validate {
++        return Ok(());
++    }
++
++    write_impl(cx, args.first(), true, true)
++}
++
+ fn set_indent_style(
+     cx: &mut compositor::Context,
+     args: &[Cow<str>],
+@@ -628,7 +684,7 @@ fn write_quit(
+         return Ok(());
+     }
+ 
+-    write_impl(cx, args.first(), false)?;
++    write_impl(cx, args.first(), false, false)?;
+     cx.block_try_flush_writes()?;
+     quit(cx, &[], event)
+ }
+@@ -642,7 +698,7 @@ fn force_write_quit(
+         return Ok(());
+     }
+ 
+-    write_impl(cx, args.first(), true)?;
++    write_impl(cx, args.first(), true, false)?;
+     cx.block_try_flush_writes()?;
+     force_quit(cx, &[], event)
+ }
+@@ -1721,6 +1777,43 @@ fn hsplit_new(
+     Ok(())
+ }
+ 
++fn focus(
++    cx: &mut compositor::Context,
++    args: &[Cow<str>],
++    event: PromptEvent,
++) -> anyhow::Result<()> {
++    if event != PromptEvent::Validate {
++        return Ok(());
++    }
++
++    ensure!(!args.is_empty(), "Window number is required");
++    let num: usize = args.first().unwrap().parse()?;
++    let view = cx.editor.tree.views_sorted_by_position().nth(num - 1);
++
++    if let Some(view) = view {
++        cx.editor.focus(view.id)
++    } else {
++        cx.editor
++            .set_error(format!("Window {} doesn't exist!", num))
++    }
++
++    Ok(())
++}
++
++fn focus_insert(
++    cx: &mut compositor::Context,
++    args: &[Cow<str>],
++    event: PromptEvent,
++) -> anyhow::Result<()> {
++    // Focus firstly:
++    focus(cx, args, event)?;
++
++    // Then enter the insert mode:
++    cx.editor.mode = Mode::Insert;
++
++    Ok(())
++}
++
+ fn debug_eval(
+     cx: &mut compositor::Context,
+     args: &[Cow<str>],
+@@ -2551,6 +2644,13 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
+         fun: open,
+         signature: CommandSignature::all(completers::filename),
+     },
++    TypableCommand {
++        name: "open-in-current",
++        aliases: &["O", "E"],
++        doc: "Open a file based on current buffer's directory.",
++        fun: open_in_current,
++        signature: CommandSignature::all(completers::filename_in_current),
++    },
+     TypableCommand {
+         name: "buffer-close",
+         aliases: &["bc", "bclose"],
+@@ -2649,6 +2749,20 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
+         fun: format,
+         signature: CommandSignature::none(),
+     },
++    TypableCommand {
++        name: "format-write",
++        aliases: &["m"],
++        doc: "Format the document, then write.",
++        fun: format_write,
++        signature: CommandSignature::none(),
++    },
++    TypableCommand {
++        name: "format-write!",
++        aliases: &["m!"],
++        doc: "Format the document, then write forcibily.",
++        fun: format_write_force,
++        signature: CommandSignature::none(),
++    },
+     TypableCommand {
+         name: "indent-style",
+         aliases: &[],
+@@ -2974,6 +3088,20 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
+         fun: hsplit_new,
+         signature: CommandSignature::none(),
+     },
++    TypableCommand {
++        name: "focus",
++        aliases: &[],
++        doc: "Focus a window by number.",
++        fun: focus,
++        signature: CommandSignature::none(),
++    },
++    TypableCommand {
++        name: "focus_insert",
++        aliases: &[],
++        doc: "Focus a window by number, then enter insert mode.",
++        fun: focus_insert,
++        signature: CommandSignature::none(),
++    },
+     TypableCommand {
+         name: "tutor",
+         aliases: &[],
+diff --git a/helix-term/src/keymap.rs b/helix-term/src/keymap.rs
+index 020ecaf40f0f..2e1743d4ea3d 100644
+--- a/helix-term/src/keymap.rs
++++ b/helix-term/src/keymap.rs
+@@ -72,18 +72,31 @@ impl KeyTrieNode {
+         }
+     }
+ 
+-    pub fn infobox(&self) -> Info {
+-        let mut body: Vec<(BTreeSet<KeyEvent>, &str)> = Vec::with_capacity(self.len());
++    pub fn infobox(&self, editor: &helix_view::Editor) -> Info {
++        let mut body: Vec<(BTreeSet<KeyEvent>, String)> = Vec::with_capacity(self.len());
+         for (&key, trie) in self.iter() {
+             let desc = match trie {
+                 KeyTrie::MappableCommand(cmd) => {
+                     if cmd.name() == "no_op" {
+                         continue;
+                     }
+-                    cmd.doc()
++
++                    // Special handling for ":toggle_option", we show the current value as well.
++                    // TODO: more generic approach, to make other mappable/typable commands work.
++                    match cmd {
++                        MappableCommand::Typable { name, args, .. } if name == "toggle-option" => {
++                            let pointer = format!("/{}", args[0].replace('.', "/"));
++                            let value = serde_json::json!(editor.config().deref())
++                                .pointer(&pointer)
++                                .unwrap()
++                                .clone();
++                            format!("{} ?{}", cmd.doc(), value)
++                        }
++                        _ => cmd.doc().to_string(),
++                    }
+                 }
+-                KeyTrie::Node(n) => &n.name,
+-                KeyTrie::Sequence(_) => "[Multiple commands]",
++                KeyTrie::Node(n) => n.name.to_string(),
++                KeyTrie::Sequence(_) => "[Multiple commands]".to_string(),
+             };
+             match body.iter().position(|(_, d)| d == &desc) {
+                 Some(pos) => {
+diff --git a/helix-term/src/keymap/default.rs b/helix-term/src/keymap/default.rs
+index c6cefd927574..1ebb8529920a 100644
+--- a/helix-term/src/keymap/default.rs
++++ b/helix-term/src/keymap/default.rs
+@@ -17,7 +17,8 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
+         "F" => find_prev_char,
+         "r" => replace,
+         "R" => replace_with_yanked,
+-        "A-." =>  repeat_last_motion,
++        // "." => repeat_last_insert is defined in @see command_mode
++        "A-." => repeat_last_motion,
+ 
+         "~" => switch_case,
+         "`" => switch_to_lowercase,
+@@ -77,7 +78,6 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
+         "C" => copy_selection_on_next_line,
+         "A-C" => copy_selection_on_prev_line,
+ 
+-
+         "s" => select_regex,
+         "A-s" => split_selection_on_newline,
+         "A-minus" => merge_selections,
+@@ -113,6 +113,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
+             "g" => goto_prev_change,
+             "G" => goto_first_change,
+             "f" => goto_prev_function,
++            "n" => goto_prev_function_name,
+             "t" => goto_prev_class,
+             "a" => goto_prev_parameter,
+             "c" => goto_prev_comment,
+@@ -127,6 +128,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
+             "g" => goto_next_change,
+             "G" => goto_last_change,
+             "f" => goto_next_function,
++            "n" => goto_next_function_name,
+             "t" => goto_next_class,
+             "a" => goto_next_parameter,
+             "c" => goto_next_comment,
+diff --git a/helix-term/src/ui/editor.rs b/helix-term/src/ui/editor.rs
+index 5d028415e85f..814d1070306a 100644
+--- a/helix-term/src/ui/editor.rs
++++ b/helix-term/src/ui/editor.rs
+@@ -887,7 +887,7 @@ impl EditorView {
+         let mut last_mode = mode;
+         self.pseudo_pending.extend(self.keymaps.pending());
+         let key_result = self.keymaps.get(mode, event);
+-        cxt.editor.autoinfo = self.keymaps.sticky().map(|node| node.infobox());
++        cxt.editor.autoinfo = self.keymaps.sticky().map(|node| node.infobox(&cxt.editor));
+ 
+         let mut execute_command = |command: &commands::MappableCommand| {
+             command.execute(cxt);
+@@ -918,7 +918,7 @@ impl EditorView {
+             KeymapResult::Matched(command) => {
+                 execute_command(command);
+             }
+-            KeymapResult::Pending(node) => cxt.editor.autoinfo = Some(node.infobox()),
++            KeymapResult::Pending(node) => cxt.editor.autoinfo = Some(node.infobox(&cxt.editor)),
+             KeymapResult::MatchedSequence(commands) => {
+                 for command in commands {
+                     execute_command(command);
+@@ -1582,10 +1582,11 @@ impl Component for EditorView {
+                 cx.editor.theme.get("ui.text")
+             };
+ 
+-            surface.set_string(
++            surface.set_stringn(
+                 area.x,
+                 area.y + area.height.saturating_sub(1),
+                 status_msg,
++                area.width as usize,
+                 style,
+             );
+         }
+diff --git a/helix-term/src/ui/mod.rs b/helix-term/src/ui/mod.rs
+index 6ee49fa57ddd..337d969a36f7 100644
+--- a/helix-term/src/ui/mod.rs
++++ b/helix-term/src/ui/mod.rs
+@@ -19,7 +19,9 @@ use crate::filter_picker_entry;
+ use crate::job::{self, Callback};
+ pub use completion::Completion;
+ pub use editor::EditorView;
++use helix_core::regex;
+ use helix_stdx::rope;
++use helix_view::editor::SearchConfig;
+ pub use markdown::Markdown;
+ pub use menu::Menu;
+ pub use picker::{Column as PickerColumn, FileLocation, Picker};
+@@ -69,6 +71,32 @@ pub fn prompt_with_input(
+     cx.push_layer(Box::new(prompt));
+ }
+ 
++pub fn transform_search_query(config: &SearchConfig, query: &str) -> (String, bool) {
++    let case_insensitive = if config.case_sensitive {
++        false
++    } else if config.smart_case {
++        !query.chars().any(char::is_uppercase)
++    } else {
++        false
++    };
++
++    let input = if !config.regex {
++        regex::escape(query)
++    } else {
++        // TODO: avoid copy
++        query.to_string()
++    };
++
++    return (
++        if config.whole_word {
++            format!(r"\b{}\b", input)
++        } else {
++            input
++        },
++        case_insensitive,
++    );
++}
++
+ pub fn regex_prompt(
+     cx: &mut crate::commands::Context,
+     prompt: std::borrow::Cow<'static, str>,
+@@ -84,6 +112,7 @@ pub fn regex_prompt(
+         move |cx, regex, _, event| fun(cx, regex, event),
+     );
+ }
++
+ pub fn raw_regex_prompt(
+     cx: &mut crate::commands::Context,
+     prompt: std::borrow::Cow<'static, str>,
+@@ -114,19 +143,14 @@ pub fn raw_regex_prompt(
+                         return;
+                     }
+ 
+-                    let case_insensitive = if config.search.smart_case {
+-                        !input.chars().any(char::is_uppercase)
+-                    } else {
+-                        false
+-                    };
+-
++                    let (input, case_insensitive) = transform_search_query(&config.search, input);
+                     match rope::RegexBuilder::new()
+                         .syntax(
+                             rope::Config::new()
+                                 .case_insensitive(case_insensitive)
+                                 .multi_line(true),
+                         )
+-                        .build(input)
++                        .build(input.as_str())
+                     {
+                         Ok(regex) => {
+                             let (view, doc) = current!(cx.editor);
+@@ -139,7 +163,7 @@ pub fn raw_regex_prompt(
+                                 view.jumps.push((doc_id, snapshot.clone()));
+                             }
+ 
+-                            fun(cx, regex, input, event);
++                            fun(cx, regex, input.as_str(), event);
+ 
+                             let (view, doc) = current!(cx.editor);
+                             view.ensure_cursor_in_view(doc, config.scrolloff);
+@@ -357,6 +381,27 @@ pub mod completers {
+         filename_with_git_ignore(editor, input, true)
+     }
+ 
++    pub fn filename_in_current(editor: &Editor, input: &str) -> Vec<Completion> {
++        // @see open_in_current
++        let doc_path = match editor.current_buffer_directory() {
++            Some(p) => p,
++            None => return Vec::new(),
++        };
++
++        let doc_path = doc_path.to_string_lossy();
++        let input = format!("{doc_path}/{input}");
++
++        // Should complete at the "really" input end (the user typed):
++        // @see change_completion_selection
++        filename_with_git_ignore(editor, input.as_str(), true)
++            .iter()
++            .map(|p| {
++                let start = p.0.start - doc_path.len() - 1;
++                (start.., p.1.clone())
++            })
++            .collect()
++    }
++
+     pub fn filename_with_git_ignore(
+         editor: &Editor,
+         input: &str,
+diff --git a/helix-term/src/ui/picker.rs b/helix-term/src/ui/picker.rs
+index df8d52ebd2f8..6879de47600a 100644
+--- a/helix-term/src/ui/picker.rs
++++ b/helix-term/src/ui/picker.rs
+@@ -98,7 +98,7 @@ pub enum Preview<'picker, 'editor> {
+ }
+ 
+ impl Preview<'_, '_> {
+-    fn document(&self) -> Option<&Document> {
++    pub fn document(&self) -> Option<&Document> {
+         match self {
+             Preview::EditorDocument(doc) => Some(doc),
+             Preview::Cached(CachedPreview::Document(doc)) => Some(doc),
+@@ -175,11 +175,10 @@ impl<T, D> Injector<T, D> {
+     }
+ }
+ 
+-type ColumnFormatFn<T, D> = for<'a> fn(&'a T, &'a D) -> Cell<'a>;
+-
+ pub struct Column<T, D> {
+     name: Arc<str>,
+-    format: ColumnFormatFn<T, D>,
++    /// Accept a closure, trading some performance against customization:
++    format: Arc<dyn for<'a> Fn(&'a T, &'a D) -> Cell<'a> + Send + Sync>,
+     /// Whether the column should be passed to nucleo for matching and filtering.
+     /// `DynamicPicker` uses this so that the dynamic column (for example regex in
+     /// global search) is not used for filtering twice.
+@@ -188,10 +187,14 @@ pub struct Column<T, D> {
+ }
+ 
+ impl<T, D> Column<T, D> {
+-    pub fn new(name: impl Into<Arc<str>>, format: ColumnFormatFn<T, D>) -> Self {
++    pub fn new<F>(name: impl Into<Arc<str>>, format: F) -> Self
++    where
++        F: for<'a> Fn(&'a T, &'a D) -> Cell<'a> + Send + Sync,
++        F: 'static,
++    {
+         Self {
+             name: name.into(),
+-            format,
++            format: Arc::new(format),
+             filter: true,
+             hidden: false,
+         }
+@@ -199,11 +202,9 @@ impl<T, D> Column<T, D> {
+ 
+     /// A column which does not display any contents
+     pub fn hidden(name: impl Into<Arc<str>>) -> Self {
+-        let format = |_: &T, _: &D| unreachable!();
+-
+         Self {
+             name: name.into(),
+-            format,
++            format: Arc::new(|_: &T, _: &D| unreachable!()),
+             filter: false,
+             hidden: true,
+         }
+@@ -224,6 +225,74 @@ impl<T, D> Column<T, D> {
+     }
+ }
+ 
++const CACHE_READ_AHEAD_SIZE: usize = 1024;
++
++pub struct DocumentPreviewCache {
++    /// Caches paths to documents
++    preview_cache: HashMap<Arc<Path>, CachedPreview>,
++    read_buffer: Vec<u8>,
++}
++
++impl DocumentPreviewCache {
++    pub fn new() -> Self {
++        Self {
++            preview_cache: HashMap::new(),
++            read_buffer: Vec::with_capacity(CACHE_READ_AHEAD_SIZE),
++        }
++    }
++
++    /// Get (cached) preview for the currently selected item. If a document corresponding
++    /// to the path is already open in the editor, it is used instead.
++    pub fn get_preview<'picker, 'editor>(
++        &'picker mut self,
++        path: &Path,
++        editor: &'editor Editor,
++    ) -> Preview<'picker, 'editor> {
++        if let Some(doc) = editor.document_by_path(path) {
++            return Preview::EditorDocument(doc);
++        }
++
++        // TODO: Performance?
++        let path: Arc<Path> = path.into();
++        if self.preview_cache.contains_key(&path) {
++            let preview = &self.preview_cache[&path];
++            return Preview::Cached(preview);
++        }
++
++        let data = std::fs::File::open(&path).and_then(|file| {
++            let metadata = file.metadata()?;
++            // Read up to 1kb to detect the content type
++            let n = file.take(1024).read_to_end(&mut self.read_buffer)?;
++            let content_type = content_inspector::inspect(&self.read_buffer[..n]);
++            self.read_buffer.clear();
++            Ok((metadata, content_type))
++        });
++
++        let preview = data
++            .map(
++                |(metadata, content_type)| match (metadata.len(), content_type) {
++                    (_, content_inspector::ContentType::BINARY) => CachedPreview::Binary,
++                    (size, _) if size > MAX_FILE_SIZE_FOR_PREVIEW => CachedPreview::LargeFile,
++                    _ => Document::open(&path, None, None, editor.config.clone())
++                        .map(|doc| CachedPreview::Document(Box::new(doc)))
++                        .unwrap_or(CachedPreview::NotFound),
++                },
++            )
++            .unwrap_or(CachedPreview::NotFound);
++
++        self.preview_cache.insert(path.clone(), preview);
++        Preview::Cached(&self.preview_cache[&path])
++    }
++
++    pub fn get_mut(&mut self, path: &Arc<Path>) -> Option<&mut CachedPreview> {
++        self.preview_cache.get_mut(path)
++    }
++
++    pub fn next(&self) -> Option<&CachedPreview> {
++        self.preview_cache.values().next()
++    }
++}
++
+ /// Returns a new list of options to replace the contents of the picker
+ /// when called with the current picker query,
+ type DynQueryCallback<T, D> =
+@@ -251,9 +320,7 @@ pub struct Picker<T: 'static + Send + Sync, D: 'static> {
+     callback_fn: PickerCallback<T>,
+ 
+     pub truncate_start: bool,
+-    /// Caches paths to documents
+-    preview_cache: HashMap<Arc<Path>, CachedPreview>,
+-    read_buffer: Vec<u8>,
++    preview_cache: DocumentPreviewCache,
+     /// Given an item in the picker, return the file path and line number to display.
+     file_fn: Option<FileCallback<T>>,
+     /// An event handler for syntax highlighting the currently previewed file.
+@@ -356,7 +423,7 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
+ 
+         let widths = columns
+             .iter()
+-            .map(|column| Constraint::Length(column.name.chars().count() as u16))
++            .map(|column| Constraint::Length(column.name.chars().count() as u16 + 1u16))
+             .collect();
+ 
+         let query = PickerQuery::new(columns.iter().map(|col| &col.name).cloned(), default_column);
+@@ -375,8 +442,7 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
+             callback_fn: Box::new(callback_fn),
+             completion_height: 0,
+             widths,
+-            preview_cache: HashMap::new(),
+-            read_buffer: Vec::with_capacity(1024),
++            preview_cache: DocumentPreviewCache::new(),
+             file_fn: None,
+             preview_highlight_handler: PreviewHighlightHandler::<T, D>::default().spawn(),
+             dynamic_query_handler: None,
+@@ -410,8 +476,28 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
+         self
+     }
+ 
+-    pub fn with_history_register(mut self, history_register: Option<char>) -> Self {
++    pub fn with_cached_previews(mut self, preview_cache: DocumentPreviewCache) -> Self {
++        self.preview_cache = preview_cache;
++        self
++    }
++
++    pub fn with_history_register(
++        mut self,
++        history_register: Option<char>,
++        editor: &Editor,
++    ) -> Self {
+         self.prompt.with_history_register(history_register);
++
++        // If the prompt has a history completion and is empty, accept it now
++        if let Some(completion) = self
++            .prompt
++            .first_history_completion(editor)
++            .filter(|_| self.prompt.line().is_empty())
++        {
++            self.prompt.set_line(completion.to_string(), editor);
++            self.handle_prompt_change(true);
++        }
++
+         self
+     }
+ 
+@@ -565,61 +651,29 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
+         let current = self.selection()?;
+         let (path_or_id, range) = (self.file_fn.as_ref()?)(editor, current)?;
+ 
+-        match path_or_id {
++        let preview = match path_or_id {
+             PathOrId::Path(path) => {
+-                if let Some(doc) = editor.document_by_path(path) {
+-                    return Some((Preview::EditorDocument(doc), range));
+-                }
+-
+-                if self.preview_cache.contains_key(path) {
+-                    // NOTE: we use `HashMap::get_key_value` here instead of indexing so we can
+-                    // retrieve the `Arc<Path>` key. The `path` in scope here is a `&Path` and
+-                    // we can cheaply clone the key for the preview highlight handler.
+-                    let (path, preview) = self.preview_cache.get_key_value(path).unwrap();
+-                    if matches!(preview, CachedPreview::Document(doc) if doc.language_config().is_none())
+-                    {
+-                        helix_event::send_blocking(&self.preview_highlight_handler, path.clone());
+-                    }
+-                    return Some((Preview::Cached(preview), range));
+-                }
+-
+-                let path: Arc<Path> = path.into();
+-                let data = std::fs::File::open(&path).and_then(|file| {
+-                    let metadata = file.metadata()?;
+-                    // Read up to 1kb to detect the content type
+-                    let n = file.take(1024).read_to_end(&mut self.read_buffer)?;
+-                    let content_type = content_inspector::inspect(&self.read_buffer[..n]);
+-                    self.read_buffer.clear();
+-                    Ok((metadata, content_type))
+-                });
+-                let preview = data
+-                    .map(
+-                        |(metadata, content_type)| match (metadata.len(), content_type) {
+-                            (_, content_inspector::ContentType::BINARY) => CachedPreview::Binary,
+-                            (size, _) if size > MAX_FILE_SIZE_FOR_PREVIEW => {
+-                                CachedPreview::LargeFile
+-                            }
+-                            _ => Document::open(&path, None, None, editor.config.clone())
+-                                .map(|doc| {
+-                                    // Asynchronously highlight the new document
+-                                    helix_event::send_blocking(
+-                                        &self.preview_highlight_handler,
+-                                        path.clone(),
+-                                    );
+-                                    CachedPreview::Document(Box::new(doc))
+-                                })
+-                                .unwrap_or(CachedPreview::NotFound),
+-                        },
+-                    )
+-                    .unwrap_or(CachedPreview::NotFound);
+-                self.preview_cache.insert(path.clone(), preview);
+-                Some((Preview::Cached(&self.preview_cache[&path]), range))
++                // TODO: avoid deeply copied 'to_owned'?
++                let path = path.to_owned();
++                self.preview_cache.get_preview(path.as_path(), editor)
+             }
+             PathOrId::Id(id) => {
+                 let doc = editor.documents.get(&id).unwrap();
+-                Some((Preview::EditorDocument(doc), range))
++                Preview::EditorDocument(doc)
++            }
++        };
++
++        if let Preview::Cached(CachedPreview::Document(doc)) = preview {
++            // TODO: Simplify?
++            if doc.language_config().is_none() {
++                helix_event::send_blocking(
++                    &self.preview_highlight_handler,
++                    doc.path().unwrap().clone().into(),
++                );
+             }
+         }
++
++        Some((preview, range))
+     }
+ 
+     fn render_picker(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
+@@ -780,8 +834,8 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
+             .column_spacing(1)
+             .widths(&self.widths);
+ 
+-        // -- Header
+-        if self.columns.len() > 1 {
++        // -- Header, always show; with `if true` to keep indent for git diff
++        if true {
+             let active_column = self.query.active_column(self.prompt.position());
+             let header_style = cx.editor.theme.get("ui.picker.header");
+             let header_column_style = cx.editor.theme.get("ui.picker.header.column");
+@@ -798,7 +852,9 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
+                                 header_column_style
+                             };
+ 
+-                        Cell::from(Span::styled(Cow::from(&*column.name), style))
++                        // Add a prefix % to indicate you can filter with it
++                        let name = format!("%{}", &*column.name);
++                        Cell::from(Span::styled(Cow::from(name), style))
+                     }
+                 }))
+                 .style(header_style),
+@@ -1018,17 +1074,7 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
+                 }
+             }
+             key!(Enter) => {
+-                // If the prompt has a history completion and is empty, use enter to accept
+-                // that completion
+-                if let Some(completion) = self
+-                    .prompt
+-                    .first_history_completion(ctx.editor)
+-                    .filter(|_| self.prompt.line().is_empty())
+-                {
+-                    self.prompt.set_line(completion.to_string(), ctx.editor);
+-                    // Inserting from the history register is a paste.
+-                    self.handle_prompt_change(true);
+-                } else {
++                if true {
+                     if let Some(option) = self.selection() {
+                         (self.callback_fn)(ctx, option, Action::Replace);
+                     }
+diff --git a/helix-term/src/ui/prompt.rs b/helix-term/src/ui/prompt.rs
+index f44020c584d9..53ac6f509cfa 100644
+--- a/helix-term/src/ui/prompt.rs
++++ b/helix-term/src/ui/prompt.rs
+@@ -320,6 +320,13 @@ impl Prompt {
+         self.recalculate_completion(editor);
+     }
+ 
++    fn kill_whole_line(&mut self, editor: &Editor) {
++        self.line = String::new();
++        self.cursor = 0;
++
++        self.recalculate_completion(editor);
++    }
++
+     pub fn clear(&mut self, editor: &Editor) {
+         self.line.clear();
+         self.cursor = 0;
+@@ -566,6 +573,10 @@ impl Component for Prompt {
+                 self.kill_to_start_of_line(cx.editor);
+                 (self.callback_fn)(cx, &self.line, PromptEvent::Update);
+             }
++            alt!('k') => {
++                self.kill_whole_line(cx.editor);
++                (self.callback_fn)(cx, &self.line, PromptEvent::Update);
++            }
+             ctrl!('h') | key!(Backspace) | shift!(Backspace) => {
+                 self.delete_char_backwards(cx.editor);
+                 (self.callback_fn)(cx, &self.line, PromptEvent::Update);
+diff --git a/helix-term/src/ui/statusline.rs b/helix-term/src/ui/statusline.rs
+index 7437cbd074e5..8630a578a30c 100644
+--- a/helix-term/src/ui/statusline.rs
++++ b/helix-term/src/ui/statusline.rs
+@@ -139,6 +139,7 @@ where
+ {
+     match element_id {
+         helix_view::editor::StatusLineElement::Mode => render_mode,
++        helix_view::editor::StatusLineElement::Window => render_window_number,
+         helix_view::editor::StatusLineElement::Spinner => render_lsp_spinner,
+         helix_view::editor::StatusLineElement::FileBaseName => render_file_base_name,
+         helix_view::editor::StatusLineElement::FileName => render_file_name,
+@@ -163,6 +164,7 @@ where
+         helix_view::editor::StatusLineElement::Spacer => render_spacer,
+         helix_view::editor::StatusLineElement::VersionControl => render_version_control,
+         helix_view::editor::StatusLineElement::Register => render_register,
++        helix_view::editor::StatusLineElement::SearchConfig => render_search_config,
+     }
+ }
+ 
+@@ -200,6 +202,27 @@ where
+     );
+ }
+ 
++fn render_window_number<F>(context: &mut RenderContext, write: F)
++where
++    F: Fn(&mut RenderContext, String, Option<Style>) + Copy,
++{
++    context.view.id;
++    let id = 1 + context
++        .editor
++        .tree
++        .views_sorted_by_position()
++        .enumerate()
++        .find(|(_, v)| v.id == context.view.id)
++        .unwrap()
++        .0;
++    // little bit *colorful*
++    write(
++        context,
++        format!(" {{{} ", id),
++        Some(context.editor.theme.get("magenta")),
++    );
++}
++
+ // TODO think about handling multiple language servers
+ fn render_lsp_spinner<F>(context: &mut RenderContext, write: F)
+ where
+@@ -531,3 +554,22 @@ where
+         write(context, format!(" reg={} ", reg), None)
+     }
+ }
++
++fn render_search_config<F>(context: &mut RenderContext, write: F)
++where
++    F: Fn(&mut RenderContext, String, Option<Style>) + Copy,
++{
++    // TODO: place to ui/editor.rs using `status_msg`?
++    let sc = &context.editor.config().search;
++    write(
++        context,
++        format!(
++            " ({}{}{}{}) ",
++            if sc.regex { 'r' } else { ' ' },
++            if sc.case_sensitive { 'c' } else { ' ' },
++            if sc.smart_case { 's' } else { ' ' },
++            if sc.whole_word { 'w' } else { ' ' }
++        ),
++        None,
++    )
++}
+diff --git a/helix-view/src/editor.rs b/helix-view/src/editor.rs
+index 6c585a8a7f2c..452175b80b02 100644
+--- a/helix-view/src/editor.rs
++++ b/helix-view/src/editor.rs
+@@ -474,6 +474,12 @@ pub struct SearchConfig {
+     pub smart_case: bool,
+     /// Whether the search should wrap after depleting the matches. Default to true.
+     pub wrap_around: bool,
++    /// Forced case sensitive. Defaults to false, the smart_case is respected when false.
++    pub case_sensitive: bool,
++    /// Search whole word. Defaults to false.
++    pub whole_word: bool,
++    /// Use regex all the places. Defaults to true.
++    pub regex: bool,
+ }
+ 
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+@@ -493,6 +499,7 @@ impl Default for StatusLineConfig {
+         Self {
+             left: vec![
+                 E::Mode,
++                E::Window,
+                 E::Spinner,
+                 E::FileName,
+                 E::ReadOnlyIndicator,
+@@ -503,6 +510,7 @@ impl Default for StatusLineConfig {
+                 E::Diagnostics,
+                 E::Selections,
+                 E::Register,
++                E::SearchConfig,
+                 E::Position,
+                 E::FileEncoding,
+             ],
+@@ -536,6 +544,9 @@ pub enum StatusLineElement {
+     /// The editor mode (Normal, Insert, Visual/Selection)
+     Mode,
+ 
++    /// Window Number
++    Window,
++
+     /// The LSP activity spinner
+     Spinner,
+ 
+@@ -595,6 +606,9 @@ pub enum StatusLineElement {
+ 
+     /// Indicator for selected register
+     Register,
++
++    /// Indicator for the search config (sensetive or else), TODO: global
++    SearchConfig,
+ }
+ 
+ // Cursor shape is read and used on every rendered frame and so needs
+@@ -1010,6 +1024,9 @@ impl Default for SearchConfig {
+         Self {
+             wrap_around: true,
+             smart_case: true,
++            case_sensitive: false,
++            whole_word: false,
++            regex: true,
+         }
+     }
+ }
+@@ -1429,6 +1446,13 @@ impl Editor {
+         Ok(())
+     }
+ 
++    // TODO: current_buffer().directory()
++    pub fn current_buffer_directory(&self) -> Option<PathBuf> {
++        doc!(self)
++            .path()
++            .and_then(|path| path.parent().map(|path| path.to_path_buf()))
++    }
++
+     pub fn set_doc_path(&mut self, doc_id: DocumentId, path: &Path) {
+         let doc = doc_mut!(self, &doc_id);
+         let old_path = doc.path();
+diff --git a/helix-view/src/tree.rs b/helix-view/src/tree.rs
+index aba947a218cc..cb9682131fcb 100644
+--- a/helix-view/src/tree.rs
++++ b/helix-view/src/tree.rs
+@@ -1,3 +1,5 @@
++use std::{cmp::Ordering, collections::BinaryHeap, convert::identity, iter};
++
+ use crate::{graphics::Rect, View, ViewId};
+ use slotmap::HopSlotMap;
+ 
+@@ -280,6 +282,38 @@ impl Tree {
+         })
+     }
+ 
++    // TODO: generic `sorted_by`
++    pub fn views_sorted_by_position(&self) -> impl Iterator<Item = &View> {
++        impl Eq for View {}
++
++        impl PartialEq for View {
++            fn eq(&self, other: &Self) -> bool {
++                self.area.x == other.area.x && self.area.y == other.area.y
++            }
++        }
++
++        // The binary heap is reversed...
++        impl Ord for View {
++            fn cmp(&self, other: &Self) -> Ordering {
++                other
++                    .area
++                    .x
++                    .cmp(&self.area.x)
++                    .then_with(|| other.area.y.cmp(&self.area.y))
++            }
++        }
++
++        impl PartialOrd for View {
++            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
++                Some(self.cmp(other))
++            }
++        }
++
++        // TODO: the `into_iter_sorted` of BinaryHeap is unstable...
++        let mut heap = self.views().map(|(v, _)| v).collect::<BinaryHeap<_>>();
++        iter::repeat_with(move || heap.pop()).map_while(identity)
++    }
++
+     pub fn views_mut(&mut self) -> impl Iterator<Item = (&mut View, bool)> {
+         let focus = self.focus;
+         self.nodes
+diff --git a/runtime/queries/c/textobjects.scm b/runtime/queries/c/textobjects.scm
+index 63ec4a5677f2..26fd35d9563e 100644
+--- a/runtime/queries/c/textobjects.scm
++++ b/runtime/queries/c/textobjects.scm
+@@ -1,3 +1,6 @@
++(function_declarator
++  declarator: (identifier) @function_name.inside)
++
+ (function_definition
+   body: (_) @function.inside) @function.around
+ 
+diff --git a/runtime/queries/python/textobjects.scm b/runtime/queries/python/textobjects.scm
+index 2b9556fca7bc..85cb1241e5d5 100644
+--- a/runtime/queries/python/textobjects.scm
++++ b/runtime/queries/python/textobjects.scm
+@@ -1,4 +1,5 @@
+ (function_definition
++  name: (identifier) @function_name.inside
+   body: (block)? @function.inside) @function.around
+ 
+ (class_definition
+diff --git a/runtime/queries/rust/textobjects.scm b/runtime/queries/rust/textobjects.scm
+index de517d362408..d3b77e230488 100644
+--- a/runtime/queries/rust/textobjects.scm
++++ b/runtime/queries/rust/textobjects.scm
+@@ -1,4 +1,5 @@
+ (function_item
++  name: (_) @function_name.inside
+   body: (_) @function.inside) @function.around
+ 
+ (closure_expression
