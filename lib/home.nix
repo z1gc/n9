@@ -14,7 +14,7 @@
 #                  Due to this restriction, this should be array of strings.
 #                  For other packages, you might need to write a module.
 # @input modules: Imports from.
-# @input deployment: Additional arguments to deployer, currently supports keys.
+# @input secrets: Key file you want to upload (using colmena upload-keys).
 #
 # @output: AttrSet of {modules,deployment}.
 # Using if/else here because we want to maintain a consistency of dev's flake.
@@ -28,9 +28,7 @@ that: username: passwd: # <- Module arguments
   groups ? [ ],
   packages ? [ ],
   modules ? [ ],
-  deployment ? {
-    keys = { };
-  },
+  secrets ? { },
 }: # <- NixOS or HomeManager configurations (kind of)
 
 let
@@ -79,28 +77,6 @@ let
       stateVersion = "25.05";
     };
   };
-
-  combined.keys =
-    # User provided:
-    (builtins.mapAttrs (
-      _: v:
-      v
-      // lib.optionalAttrs (lib.strings.hasPrefix "@HOME@" (v.destDir or "")) {
-        destDir = home + (lib.strings.removePrefix "@HOME@" v.destDir);
-      }
-      // {
-        user = username;
-        group = username;
-        uploadAt = "post-activation"; # After user and home created.
-      }
-    ) deployment.keys)
-    # Password argument:
-    // {
-      "passwd-${username}" = {
-        keyFile = passwd;
-        permissions = "0400";
-      };
-    };
 in
 assert lib.assertMsg (username != "root") "can't manage root!";
 {
@@ -144,10 +120,31 @@ assert lib.assertMsg (username != "root") "can't manage root!";
         }
       ]
       ++ lib.optionals (builtins.length authorizedKeys != 0 || builtins.length agentKeys != 0) [
-        # FIXME: want a different port?
         (self.lib.nixos-modules.miscell.sshd { })
       ];
 
-    deployment = combined;
+    secrets =
+      # User provided:
+      (builtins.mapAttrs (
+        _: v:
+        v
+        // {
+          user = username;
+          group = username;
+          destDir =
+            if v ? destDir then
+              assert lib.assertMsg (!(lib.strings.hasPrefix "/" v.destDir)) "must live within home!";
+              "${home}/${v.destDir}"
+            else
+              "/var/run/user/${uid}/keys";
+          uploadAt = "post-activation"; # After user and home created.
+        }
+      ) secrets)
+      # Password argument:
+      // {
+        "passwd-${username}" = {
+          keyFile = passwd;
+        };
+      };
   };
 }

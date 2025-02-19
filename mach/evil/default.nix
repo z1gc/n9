@@ -27,11 +27,8 @@ in
       miscell.git
     ];
 
-    deployment.keys = (n9.lib.utils.sshKey "${secret}/id_ed25519") // {
-      hosts = {
-        keyFile = "${secret}/ssh";
-        destDir = "@HOME@/.ssh/config.d";
-      };
-    };
+    secrets =
+      (n9.lib.utils.sshKey "${secret}/id_ed25519")
+      // (n9.lib.utils.secret3 "hosts" "${secret}/ssh" ".ssh/config.d");
   };
 }

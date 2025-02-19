@@ -1,7 +1,9 @@
-{
-  port ? 22,
-}:
+{ ... }@args:
 
+{ lib, ... }:
+let
+  port = if args ? port then lib.mkForce port else lib.mkDefault 22;
+in
 {
   services.openssh = {
     enable = true;

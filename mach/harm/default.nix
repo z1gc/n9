@@ -28,6 +28,7 @@ in
       editor.helix
       shell.fish
     ];
-    deployment.keys = n9.lib.utils.sshKey "${secret}/id_ed25519";
+
+    secrets = n9.lib.utils.sshKey "${secret}/id_ed25519";
   };
 }

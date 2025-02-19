@@ -13,6 +13,7 @@
 # @input modules: To nixosSystem.
 # @input packages: Shortcut.
 # @input deployment: Where you want to deploy?
+# @input secrets: The key you want to hide.
 #
 # @output: AttrSet of ${hostName} of ${that}.
 #
@@ -23,6 +24,7 @@ that: hostName: system:
   modules,
   packages ? [ ],
   deployment ? { },
+  secrets ? { },
 }: # <- Module arguments
 
 let
@@ -84,23 +86,16 @@ let
         home-manager.useGlobalPkgs = true;
       }
     ]
-    ++ (lib.optionals (deployment ? targetKey) [
+    ++ (lib.optionals (deployment ? nixKey) [
       # nix key generate-secret --key-name dotfiles.rockwolf.eu-X > .nix-key
       # cat .nix-key | nix key convert-secret-to-public
-      { nix.settings.trusted-public-keys = [ deployment.targetKey ]; }
+      { nix.settings.trusted-public-keys = [ deployment.nixKey ]; }
     ])
     ++ (lib.optionals hasHome (
       (lib.flatten (lib.mapAttrsToList (_: v: v.modules) homeConfig))
       ++ [ { users.users.root.hashedPassword = "!"; } ]
     ))
     ++ modules;
-
-  combined = nixpkgs.lib.recursiveUpdate {
-    allowLocalDeployment = true;
-    keys = lib.optionalAttrs hasHome (
-      lib.fold (a: b: a.deployment.keys // b) { } (lib.attrValues homeConfig)
-    );
-  } (builtins.removeAttrs deployment [ "targetKey" ]);
 in
 {
   # TODO: Way to assert one-to-one configuration?
@@ -119,6 +114,16 @@ in
 
   "${hostName}" = {
     imports = subModules;
-    deployment = combined;
+    deployment =
+      {
+        allowLocalDeployment = true;
+        keys = lib.optionalAttrs hasHome (
+          lib.fold (a: b: a.secrets // b) secrets (lib.attrValues homeConfig)
+        );
+      }
+      // (builtins.removeAttrs deployment [
+        "keys"
+        "nixKey"
+      ]);
   };
 }

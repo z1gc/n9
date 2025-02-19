@@ -13,7 +13,7 @@
       targetHost = "127.0.0.1";
       targetPort = 2233;
       targetUser = "byte";
-      targetKey = "evil.xa-1:3N+fGCh9nVbctbwFhQad1qF2EqOp6FM83E08sBNGIlw=";
+      nixKey = "evil.xa-1:3N+fGCh9nVbctbwFhQad1qF2EqOp6FM83E08sBNGIlw=";
     };
   };
 

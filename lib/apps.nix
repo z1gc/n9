@@ -56,11 +56,6 @@ let
     ${burn}
     test -n "$1"
 
-    # The nixos-anywhere only allows `nixosConfigurations.*`:
-    "${pkgs.gnused}/bin/sed" -i -E \
-      's/(colmenaHive.*=.*colmena.lib.makeHive)/nixosConfigurations = self.colmenaHive; \1/' \
-      flake.nix
-
     B_HWCONF="mach/$B_THAT/hardware-configuration.nix"
     if [[ ! -f "$B_HWCONF" ]]; then
       echo "{ ... }: { }" > "$B_HWCONF"
@@ -74,18 +69,19 @@ let
 
     read -r B_HOST B_PORT < \
       <(nix eval --json "$B_DEPLOY" --apply "a:[a.targetHost a.targetPort]" | "${pkgs.jq}/bin/jq" -r '@tsv')
+    B_HOST="root@$B_HOST"
     if [[ "$B_PORT" == "null" ]]; then
       B_PORT="22"
     fi
 
     B_INSTALL=("${nixos-anywhere.packages.${system}.default}"
       --generate-hardware-config nixos-generate-config "$B_HWCONF"
-      --flake ".#nixosConfigurations.nodes.$B_THAT.config" --target-host "root@$B_HOST" -p "$B_PORT")
+      --flake ".#$B_THAT" --target-host "$B_HOST" -p "$B_PORT")
 
     # Format disk:
     "''${B_INSTALL[@]}" --phases kexec,disko "$@"
     B_SSHOPTS=(-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no)
-    ssh "''${B_SSHOPTS[@]}" -p "$B_PORT" "root@$B_HOST" -- "
+    ssh "''${B_SSHOPTS[@]}" -p "$B_PORT" "$B_HOST" -- "
       umount -R /mnt/run
       mount -m -t tmpfs -o rw,nosuid,nodev,mode=755 tmpfs /mnt/run
       mount -m -t ramfs -o rw,nosuid,nodev,relatime,mode=750 ramfs /mnt/run/keys
@@ -97,7 +93,7 @@ let
         continue
       fi
       echo "key: $B_KEY_FROM -> $B_KEY_TO"
-      scp "''${B_SSHOPTS[@]}" -P "$B_PORT" "$B_KEY_FROM" "root@$B_HOST:/mnt$B_KEY_TO"
+      scp "''${B_SSHOPTS[@]}" -P "$B_PORT" "$B_KEY_FROM" "$B_HOST:/mnt$B_KEY_TO"
     done <<< "$B_KEYS"
 
     # Real switch:

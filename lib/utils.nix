@@ -1,17 +1,13 @@
 { nixpkgs, ... }:
 
-let
+rec {
+  # A little bit clean way to add patches, and a single patch:
   mkPatches =
     patches: pkg: pkgs:
     pkg.overrideAttrs (prev: {
       patches = (prev.patches or [ ]) ++ (builtins.map pkgs.fetchpatch patches);
     });
   mkPatch = patch: mkPatches [ patch ];
-
-in
-{
-  # A little bit clean way to add patches, and a single patch:
-  inherit mkPatches mkPatch;
 
   # Turn "xyz" to pkgs.xyz (only if "xyz" is string) helper:
   attrByIfStringPath =
@@ -21,18 +17,12 @@ in
     else
       maybeStringPath;
 
-  # Setup SSH keys:
-  sshKey =
-    path:
-    let
-      key = builtins.baseNameOf path;
-    in
-    {
-      # ssh-keygen -f [private] -y > [public]
-      ${key} = {
-        keyFile = path;
-        permissions = "0400";
-        destDir = "@HOME@/.ssh";
-      };
-    };
+  # Secret:
+  secret3 = name: keyFile: destDir: {
+    ${name} = { inherit keyFile destDir; };
+  };
+  secret2 = path: secret3 (builtins.baseNameOf path) path;
+
+  # ssh-keygen -f [private] -y > [public]
+  sshKey = path: secret2 path ".ssh";
 }

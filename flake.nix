@@ -41,23 +41,24 @@
         in
         builtins.map ({ name, ... }: name) directories;
 
-      # To compat with nixosSystem, may used in the future.
-      nixosConfigurations = builtins.removeAttrs (nixpkgs.lib.fold nixpkgs.lib.recursiveUpdate { } (
-        builtins.map (
-          dir:
-          let
-            # Flake like import:
-            conf = import ./mach/${dir} (
-              args
-              // {
+      colmenaHive = colmena.lib.makeHive (
+        nixpkgs.lib.fold nixpkgs.lib.recursiveUpdate { } (
+          builtins.map (
+            dir:
+            let
+              inputs = args // {
                 n9 = self;
-                self = conf;
-              }
-            );
-          in
-          conf.nixosConfigurations
-        ) (dirs ./mach)
-      )) [ "passthru" ];
+                self = outputs;
+              };
+
+              # Flake like import (the "outputs" part):
+              outputs = import ./mach/${dir} inputs;
+            in
+            # TODO: removeAttrs passthru?
+            outputs.nixosConfigurations
+          ) (dirs ./mach)
+        )
+      );
 
       # @see nix/flake.nix
       systems = [
@@ -67,7 +68,6 @@
     in
     {
       # NixOS, Nix (For package manager only, use lib.mkNixPackager?):
-      # TODO: With no hard code?
       lib.nixos = import ./lib/nixos.nix args;
       lib.nixos-modules = import ./nixos args;
 
@@ -80,7 +80,10 @@
       lib.utils = import ./lib/utils.nix args;
 
       # All of the machines:
-      colmenaHive = colmena.lib.makeHive nixosConfigurations;
+      inherit colmenaHive;
+
+      # Compatible to nixos-anywhere or other tools (nixosSystem way):
+      nixosConfigurations = colmenaHive.nodes;
 
       # Entry:
       apps = nixpkgs.lib.genAttrs systems (import ./lib/apps.nix args);
