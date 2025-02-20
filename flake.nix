@@ -87,4 +87,12 @@
       # Entry:
       devShell = nixpkgs.lib.genAttrs systems (import ./lib/shell.nix args);
     };
+
+  nixConfig = {
+    substituters = [
+      "https://mirror.sjtu.edu.cn/nix-channels/store"
+      "https://mirrors.ustc.edu.cn/nix-channels/store"
+      "https://mirrors.sustech.edu.cn/nix-channels/store"
+    ];
+  };
 }

@@ -61,25 +61,24 @@ let
       echo "{ ... }: { }" > "$B_HWCONF"
     fi
 
+    B_NIX=(nix --extra-experimental-features "nix-command flakes" --accept-flake-config)
     B_DEPLOY=".#colmenaHive.deploymentConfig.$B_THAT"
-    B_KEYS="$(nix eval --json "$B_DEPLOY.keys" \
-      | "${pkgs.jq}/bin/jq" -r 'to_entries[]
-        | select(.value.user == "root" and .value.uploadAt == "pre-activation")
+    B_KEYS="$("''${B_NIX[@]}" eval --json "$B_DEPLOY.keys" \
+      | jq -r 'to_entries[] | select(.value.user == "root" and .value.uploadAt == "pre-activation")
         | [.value.keyFile, .value.path] | @tsv')"
 
     read -r B_HOST B_PORT < \
-      <(nix eval --json "$B_DEPLOY" --apply "a:[a.targetHost a.targetPort]" | "${pkgs.jq}/bin/jq" -r '@tsv')
+      <("''${B_NIX[@]}" eval --json "$B_DEPLOY" --apply "a:[a.targetHost a.targetPort]" | jq -r '@tsv')
     B_HOST="root@$B_HOST"
-    if [[ "$B_PORT" == "null" ]]; then
-      B_PORT="22"
+    if [[ "$B_PORT" == "" || "$B_PORT" == "null" ]]; then
+      B_PORT=22
     fi
 
-    B_INSTALL=("${nixos-anywhere.packages.${system}.default}"
-      --generate-hardware-config nixos-generate-config "$B_HWCONF"
+    B_INSTALL=(nixos-anywhere --generate-hardware-config nixos-generate-config "$B_HWCONF"
       --flake ".#$B_THAT" --target-host "$B_HOST" -p "$B_PORT")
 
     # Format disk:
-    "''${B_INSTALL[@]}" --phases kexec,disko "$@"
+    "''${B_INSTALL[@]}" --phases kexec,disko
     B_SSHOPTS=(-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no)
     ssh "''${B_SSHOPTS[@]}" -p "$B_PORT" "$B_HOST" -- "
       umount -R /mnt/run
@@ -105,15 +104,15 @@ pkgs.mkShell {
   # This will import/inherit packages to this shell from `inputsFrom` packages.
   # e.g. if `inputsFrom = [ linux.dev ]` will make gcc,gnumake and other deps
   #      available to this shell, avoiding have duplicated `packages`.
-  # Different from `packages`, it won't export to PATH if the package is a
-  # binary one, only it's buildDeps (?)
   inputsFrom = [ ];
 
   packages = with pkgs; [
     rsync
     findutils
     gnused
+    jq
 
+    nixos-anywhere.packages.${system}.nixos-anywhere # expose for testing
     colmenaPackage
     burnSwitch
     burnInstall
