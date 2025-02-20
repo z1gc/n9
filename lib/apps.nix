@@ -108,20 +108,14 @@ let
     sudo "''${B_GARBAGE[@]}"
     "''${B_GARBAGE[@]}"
   '';
+
+  app = program: {
+    type = "app";
+    program = "${program}";
+  };
 in
 {
-  default = {
-    type = "app";
-    program = "${burnSwitch}";
-  };
-
-  install = {
-    type = "app";
-    program = "${burnInstall}";
-  };
-
-  gc = {
-    type = "app";
-    program = "${burnGc}";
-  };
+  default = app burnSwitch;
+  install = app burnInstall;
+  gc = app burnGc;
 }

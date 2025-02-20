@@ -54,8 +54,7 @@
               # Flake like import (the "outputs" part):
               outputs = import ./mach/${dir} inputs;
             in
-            # TODO: removeAttrs passthru?
-            outputs.nixosConfigurations
+            (builtins.removeAttrs outputs.nixosConfigurations [ "passthru" ])
           ) (dirs ./mach)
         )
       );
