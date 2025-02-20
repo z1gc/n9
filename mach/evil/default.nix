@@ -19,16 +19,17 @@ in
     ];
 
     modules = with n9.lib.home-modules; [
-      editor.helix
       shell.fish
       desktop.pop-shell
       v12n.boxes
       { programs.ssh.includes = [ "config.d/*" ]; }
       miscell.git
+      (miscell.ssh {
+        ed25519.private = "${secret}/id_ed25519";
+        # ed25519.public = "";
+      })
     ];
 
-    secrets =
-      (n9.lib.utils.sshKey "${secret}/id_ed25519")
-      // (n9.lib.utils.secret "${secret}/ssh" ".ssh/config.d/hosts");
+    secrets = n9.lib.utils.secret "${secret}/ssh" ".ssh/config.d/hosts";
   };
 }

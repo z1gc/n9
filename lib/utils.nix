@@ -27,7 +27,4 @@ rec {
     {
       ${name} = { inherit keyFile destDir; };
     };
-
-  # ssh-keygen -f [private] -y > [public]
-  sshKey = path: secret path ".ssh/${builtins.baseNameOf path}";
 }

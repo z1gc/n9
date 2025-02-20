@@ -32,7 +32,6 @@
   # Just a test virtual machine under evil, for simplicity.
   homeConfigurations = n9.lib.home self "byte" "@ASTERISK@/evil/passwd" {
     modules = with n9.lib.home-modules; [
-      editor.helix
       shell.fish
     ];
 

@@ -30,12 +30,7 @@ in
     ];
 
     modules = with n9.lib.home-modules; [
-      editor.helix
-      shell.fish
-    ];
-
-    agentKeys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILb5cEj9hvj32QeXnCD5za0VLz56yBP3CiA7Kgr1tV5S byte@harm"
+      (miscell.ssh { agentKeys = [ "ssh-ed25519 byte@coffee" ]; })
     ];
   };
 }

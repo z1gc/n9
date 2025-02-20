@@ -25,7 +25,6 @@ in
 
   homeConfigurations = n9.lib.home self "byte" "${secret}/passwd" {
     modules = with n9.lib.home-modules; [
-      editor.helix
       shell.fish
     ];
 
