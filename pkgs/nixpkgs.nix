@@ -14,10 +14,9 @@ in
       helix = utils.patch super.helix ../patches/helix-taste.patch;
       openssh = utils.patch super.openssh ../patches/openssh-plainpass.patch;
       ibus-engines = super.ibus-engines // {
-        # We can have a override chain! Hooray!
-        rime = (utils.patch super.ibus-engines.rime ../patches/ibus-rime-temp-ascii.patch).override (prev: {
+        rime = (utils.patch super.ibus-engines.rime ../patches/ibus-rime-temp-ascii.patch).override {
           rimeDataPkgs = [ (pkgs.callPackage ./rime-ice.nix { }) ];
-        });
+        };
       };
       librime = utils.patch super.librime ../patches/librime-temp-ascii.patch;
       ppp = utils.patch super.ppp ../patches/ppp-run-resolv.patch;
