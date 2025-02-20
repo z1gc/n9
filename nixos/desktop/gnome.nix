@@ -46,6 +46,8 @@
     noto-fonts-cjk-serif
     noto-fonts-emoji
     sarasa-gothic
+    nerd-fonts.fira-code
+    nerd-fonts.iosevka
   ];
 
   i18n.inputMethod = {

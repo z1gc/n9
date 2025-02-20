@@ -85,6 +85,6 @@
       nixosConfigurations = colmenaHive.nodes;
 
       # Entry:
-      apps = nixpkgs.lib.genAttrs systems (import ./lib/apps.nix args);
+      devShell = nixpkgs.lib.genAttrs systems (import ./lib/shell.nix args);
     };
 }

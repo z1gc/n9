@@ -49,6 +49,15 @@ let
             substituters = [ "https://mirrors.ustc.edu.cn/nix-channels/store" ];
           };
 
+          # https://nixos.wiki/wiki/Storage_optimization
+          nix.optimise.automatic = true;
+          nix.gc = {
+            automatic = true;
+            dates = "weekly";
+            options = "--delete-older-than 29d";
+            randomizedDelaySec = "3h";
+          };
+
           boot.loader = {
             systemd-boot.enable = true;
             efi.canTouchEfiVariables = true;

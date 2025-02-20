@@ -13,9 +13,10 @@ let
   pkgs = nixpkgs.legacyPackages.${system};
 
   # Patched of colmena:
-  colmenaPackage =
-    utils.patch colmena.packages.${system}.colmena
-      ../patches/colmena-nix-store-sign.patch;
+  colmenaPackage = utils.patches colmena.packages.${system}.colmena [
+    ../patches/colmena-nix-store-sign.patch
+    ../patches/colmena-keep-result-dir.patch
+  ];
 
   # The package of burn:
   burn = ''
@@ -31,27 +32,27 @@ let
     fi
 
     rm -rf /tmp/n9
-    "${pkgs.rsync}/bin/rsync" -a --exclude .git --exclude asterisk "$B_SOURCE/" /tmp/n9
+    rsync -a --exclude .git --exclude asterisk "$B_SOURCE/" /tmp/n9
     cd /tmp/n9
-    "${pkgs.findutils}/bin/find" mach -name default.nix -exec \
-      "${pkgs.gnused}/bin/sed" -i "s!@ASTERISK@!$B_SOURCE/asterisk!g" {} \;
+    find mach -name default.nix -exec sed -i "s!@ASTERISK@!$B_SOURCE/asterisk!g" {} \;
   '';
 
-  burnSwitch = pkgs.writers.writeBash "burn-switch" ''
+  burnSwitch = pkgs.writers.writeBashBin "burn" ''
     ${burn}
 
-    B_COLMENA=("${colmenaPackage}/bin/colmena" --show-trace --experimental-flake-eval)
+    B_COLMENA=(colmena --show-trace --experimental-flake-eval)
     if [[ "$B_THAT" == "" || "$B_THAT" == "$B_THIS" ]]; then
       B_HWCONF="mach/$B_THIS/hardware-configuration.nix"
       sudo nixos-generate-config --show-hardware-config --no-filesystems > "$B_HWCONF"
       "''${B_COLMENA[@]}" apply-local --sudo --verbose
       cp -f "$B_HWCONF" "$B_SOURCE/$B_HWCONF"
     else
-      "''${B_COLMENA[@]}" apply --on "$B_THAT" --verbose --sign "$B_SOURCE/asterisk/$B_THIS/nix-key"
+      "''${B_COLMENA[@]}" apply --on "$B_THAT" --verbose --keep-result "$B_SOURCE" \
+        --sign "$B_SOURCE/asterisk/$B_THIS/nix-key"
     fi
   '';
 
-  burnInstall = pkgs.writers.writeBash "burn-install" ''
+  burnInstall = pkgs.writers.writeBashBin "burn-install" ''
     ${burn}
     test -n "$1"
 
@@ -99,23 +100,27 @@ let
     "''${B_INSTALL[@]}" --phases install,reboot
     cp -f "$B_HWCONF" "$B_SOURCE/$B_HWCONF"
   '';
-
-  burnGc = pkgs.writers.writeBash "burn-gc" ''
-    set -uex
-    # TODO: Clean the remote machine?
-
-    B_GARBAGE=(nix-collect-garbage --delete-older-than 29d)
-    sudo "''${B_GARBAGE[@]}"
-    "''${B_GARBAGE[@]}"
-  '';
-
-  app = program: {
-    type = "app";
-    program = "${program}";
-  };
 in
-{
-  default = app burnSwitch;
-  install = app burnInstall;
-  gc = app burnGc;
+pkgs.mkShell {
+  # This will import/inherit packages to this shell from `inputsFrom` packages.
+  # e.g. if `inputsFrom = [ linux.dev ]` will make gcc,gnumake and other deps
+  #      available to this shell, avoiding have duplicated `packages`.
+  # Different from `packages`, it won't export to PATH if the package is a
+  # binary one, only it's buildDeps (?)
+  inputsFrom = [ ];
+
+  packages = with pkgs; [
+    rsync
+    findutils
+    gnused
+
+    colmenaPackage
+    burnSwitch
+    burnInstall
+  ];
+
+  shellHook = ''
+    echo "burn [hostname || $(hostname)]"
+    echo "burn-install [hostname]"
+  '';
 }

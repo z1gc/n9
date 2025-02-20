@@ -1,0 +1,216 @@
+commit 05718739ead8a79367f7cebda506c65b8f9163b4
+Author: Zigit Zo <repl@z.xas.is>
+Date:   Thu Feb 20 15:08:30 2025 +0800
+
+    feat: keep_result to other directory
+
+diff --git a/src/command/apply.rs b/src/command/apply.rs
+index 1053f9b..42336e8 100644
+--- a/src/command/apply.rs
++++ b/src/command/apply.rs
+@@ -44,10 +44,10 @@ Set to 0 to disable parallelism limit.
+         long_help = r#"Create GC roots for built profiles.
+ 
+ The built system profiles will be added as GC roots so that they will not be removed by the garbage collector.
+-The links will be created under .gcroots in the directory the Hive configuration is located.
++The links will be created under .gcroots in the directory <KEEP_RESULT>.
+ "#
+     )]
+-    keep_result: bool,
++    keep_result: Option<String>,
+     #[arg(
+         short,
+         long,
+@@ -210,10 +210,7 @@ pub async fn run(hive: Hive, opts: Opts) -> Result<(), ColmenaError> {
+         options.set_reboot(reboot);
+         options.set_force_replace_unknown_profiles(force_replace_unknown_profiles);
+         options.set_evaluator(evaluator);
+-
+-        if keep_result {
+-            options.set_create_gc_roots(true);
+-        }
++        options.set_create_gc_roots(keep_result);
+ 
+         if no_build_on_target {
+             options.set_force_build_on_target(false);
+diff --git a/src/nix/deployment/mod.rs b/src/nix/deployment/mod.rs
+index b4114d4..3894c91 100644
+--- a/src/nix/deployment/mod.rs
++++ b/src/nix/deployment/mod.rs
+@@ -12,6 +12,7 @@ pub use options::{EvaluatorType, Options};
+ 
+ use std::collections::HashMap;
+ use std::mem;
++use std::path::PathBuf;
+ use std::sync::Arc;
+ 
+ use futures::future::join_all;
+@@ -517,18 +518,14 @@ impl Deployment {
+ 
+         // Create GC root
+         let profile_r = profile.clone();
+-        let mut target = if self.options.create_gc_roots {
++        let mut target = if let Some(to) = &self.options.create_gc_roots {
+             let job = parent.create_job(JobType::CreateGcRoots, nodes.clone())?;
+-            let arc_self = self.clone();
+             job.run_waiting(|job| async move {
+-                if let Some(dir) = arc_self.hive.context_dir() {
+-                    job.state(JobState::Running)?;
+-                    let path = dir.join(".gcroots").join(format!("node-{}", &*target.name));
++                job.state(JobState::Running)?;
++                let dir = PathBuf::from(to);
++                let path = dir.join(".gcroots").join(format!("node-{}", &*target.name));
+ 
+-                    profile_r.create_gc_root(&path).await?;
+-                } else {
+-                    job.noop("No context directory to create GC roots in".to_string())?;
+-                }
++                profile_r.create_gc_root(&path).await?;
+                 Ok(target)
+             })
+             .await?
+diff --git a/src/nix/deployment/options.rs b/src/nix/deployment/options.rs
+index 12e1e63..391c139 100644
+--- a/src/nix/deployment/options.rs
++++ b/src/nix/deployment/options.rs
+@@ -27,7 +27,7 @@ pub struct Options {
+     ///
+     /// If true, .gc_roots will be created under the hive's context
+     /// directory if it exists.
+-    pub(super) create_gc_roots: bool,
++    pub(super) create_gc_roots: Option<String>,
+ 
+     /// Whether to override per-node setting to build on the nodes themselves.
+     pub(super) force_build_on_target: Option<bool>,
+@@ -77,8 +77,8 @@ impl Options {
+         self.reboot = enable;
+     }
+ 
+-    pub fn set_create_gc_roots(&mut self, enable: bool) {
+-        self.create_gc_roots = enable;
++    pub fn set_create_gc_roots(&mut self, dir: Option<String>) {
++        self.create_gc_roots = dir;
+     }
+ 
+     pub fn set_force_build_on_target(&mut self, enable: bool) {
+@@ -111,7 +111,7 @@ impl Default for Options {
+             upload_keys: true,
+             sign: None,
+             reboot: false,
+-            create_gc_roots: false,
++            create_gc_roots: None,
+             force_build_on_target: None,
+             force_replace_unknown_profiles: false,
+             evaluator: EvaluatorType::Chunked,
+diff --git a/src/nix/flake.rs b/src/nix/flake.rs
+index 5f410ea..592b9f5 100644
+--- a/src/nix/flake.rs
++++ b/src/nix/flake.rs
+@@ -1,7 +1,7 @@
+ //! Nix Flake utilities.
+ 
+ use std::convert::AsRef;
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ use std::process::Stdio;
+ 
+ use serde::Deserialize;
+@@ -14,9 +14,6 @@ use super::{ColmenaError, ColmenaResult, NixCheck};
+ pub struct Flake {
+     /// The flake metadata.
+     metadata: FlakeMetadata,
+-
+-    /// The directory the flake lives in, if it's a local flake.
+-    local_dir: Option<PathBuf>,
+ }
+ 
+ /// A `nix flake metadata --json` invocation.
+@@ -46,10 +43,7 @@ impl Flake {
+ 
+         let metadata = FlakeMetadata::resolve(flake).await?;
+ 
+-        Ok(Self {
+-            metadata,
+-            local_dir: Some(dir.as_ref().to_owned()),
+-        })
++        Ok(Self { metadata })
+     }
+ 
+     /// Creates a flake from a Flake URI.
+@@ -58,10 +52,7 @@ impl Flake {
+ 
+         let metadata = FlakeMetadata::resolve(uri.as_ref()).await?;
+ 
+-        Ok(Self {
+-            metadata,
+-            local_dir: None,
+-        })
++        Ok(Self { metadata })
+     }
+ 
+     /// Returns the URI.
+@@ -76,11 +67,6 @@ impl Flake {
+     pub fn locked_uri(&self) -> &str {
+         &self.metadata.url
+     }
+-
+-    /// Returns the local directory, if it exists.
+-    pub fn local_dir(&self) -> Option<&Path> {
+-        self.local_dir.as_deref()
+-    }
+ }
+ 
+ impl FlakeMetadata {
+diff --git a/src/nix/hive/mod.rs b/src/nix/hive/mod.rs
+index 2faa88e..3a197e8 100644
+--- a/src/nix/hive/mod.rs
++++ b/src/nix/hive/mod.rs
+@@ -106,12 +106,6 @@ pub struct Hive {
+     /// Method to evaluate the hive with.
+     evaluation_method: EvaluationMethod,
+ 
+-    /// Path to the context directory.
+-    ///
+-    /// Normally this is directory containing the "hive.nix"
+-    /// or "flake.nix".
+-    context_dir: Option<PathBuf>,
+-
+     /// Static files required to evaluate a Hive configuration.
+     assets: Assets,
+ 
+@@ -156,24 +150,15 @@ impl HivePath {
+     fn is_flake(&self) -> bool {
+         matches!(self, Self::Flake(_))
+     }
+-
+-    fn context_dir(&self) -> Option<PathBuf> {
+-        match self {
+-            Self::Legacy(p) => p.parent().map(|d| d.to_owned()),
+-            Self::Flake(flake) => flake.local_dir().map(|d| d.to_owned()),
+-        }
+-    }
+ }
+ 
+ impl Hive {
+     pub async fn new(path: HivePath) -> ColmenaResult<Self> {
+-        let context_dir = path.context_dir();
+         let assets = Assets::new(path.clone()).await?;
+ 
+         Ok(Self {
+             path,
+             evaluation_method: EvaluationMethod::NixInstantiate,
+-            context_dir,
+             assets,
+             show_trace: false,
+             impure: false,
+@@ -182,10 +167,6 @@ impl Hive {
+         })
+     }
+ 
+-    pub fn context_dir(&self) -> Option<&Path> {
+-        self.context_dir.as_ref().map(|p| p.as_ref())
+-    }
+-
+     pub async fn get_meta_config(&self) -> ColmenaResult<&MetaConfig> {
+         self.meta_config
+             .get_or_try_init(|| async {
