@@ -41,6 +41,9 @@ let
         linkConfig.RequiredForOnline = "enslaved";
       }
     );
+
+  # Y-AXIS
+  domain = "y.xas.is";
 in
 {
   # Netdev:
@@ -90,6 +93,7 @@ in
   systemd.network.networks = {
     "10-sfp-0" = mkNetwork ports.sfp-0 {
       vlan = [ ports.vlan ];
+      networkConfig.Address = "192.168.1.10/32";
     };
     "11-vlan" = mkNetwork ports.vlan { };
 
@@ -190,11 +194,14 @@ in
         "10.254.0.1,10.254.254.254,72h"
         "::,constructor:${ports.wan},slaac,ra-stateless,ra-names,72h"
       ];
-      domain = "y.xas.is";
       dhcp-host = [
         # @see /var/lib/dnsmasq/dnsmasq.leases
         "24:5e:be:87:47:cc,10.254.38.179" # snap
       ];
+
+      inherit domain;
+      local = "/${domain}/"; # only resolve in local, don't go out
+      address = [ "/wa.${domain}/10.0.0.1" ];
     };
   };
 

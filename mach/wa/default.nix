@@ -1,10 +1,10 @@
 { self, n9, ... }:
 
 let
-  secret = "@ASTERISK@/rout";
+  secret = "@ASTERISK@/wa";
 in
 {
-  nixosConfigurations = n9.lib.nixos self "rout" "x86_64-linux" {
+  nixosConfigurations = n9.lib.nixos self "wa" "x86_64-linux" {
     modules = with n9.lib.nixos-modules; [
       ./hardware-configuration.nix
       (disk.btrfs "/dev/mmcblk0")
@@ -13,7 +13,7 @@ in
 
     deployment = {
       buildOnTarget = true;
-      targetHost = "rout.y.xas.is";
+      targetHost = "wa.y.xas.is";
       targetUser = "byte";
     };
 
