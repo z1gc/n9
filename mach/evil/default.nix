@@ -19,14 +19,13 @@ in
     ];
 
     modules = with n9.lib.home-modules; [
-      shell.fish
       desktop.pop-shell
       v12n.boxes
       { programs.ssh.includes = [ "config.d/*" ]; }
       miscell.git
       (miscell.ssh {
         ed25519.private = "${secret}/id_ed25519";
-        # ed25519.public = "";
+        ed25519.public = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICw9akIf3We4wbAwVfaqr8ANZYHLbtQ5sQGz1W5ZUE8Y byte@evil";
       })
     ];
 
