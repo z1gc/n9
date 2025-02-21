@@ -84,13 +84,19 @@ assert lib.assertMsg (username != "root") "can't manage root!";
       {
         users.groups.${username}.gid = uid;
 
-        users.users.${username} = {
-          isNormalUser = true;
-          inherit uid home;
-          group = username;
-          extraGroups = [ "wheel" ] ++ groups;
-          hashedPasswordFile = "/run/keys/passwd-${username}";
-        };
+        users.users.${username} =
+          {
+            isNormalUser = true;
+            inherit uid home;
+            group = username;
+            extraGroups = [ "wheel" ] ++ groups;
+          }
+          // (
+            if (passwd == "!") then
+              { hashedPassword = passwd; }
+            else
+              { hashedPasswordFile = "/run/keys/passwd-${username}"; }
+          );
 
         home-manager.users.${username} = config;
       }
@@ -98,11 +104,11 @@ assert lib.assertMsg (username != "root") "can't manage root!";
 
     secrets =
       # Global:
-      {
+      (lib.optionalAttrs (passwd != "!") {
         "passwd-${username}" = {
           keyFile = passwd;
         };
-      }
+      })
       # Home:
       // builtins.mapAttrs (
         _: v:

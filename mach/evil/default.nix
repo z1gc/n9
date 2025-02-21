@@ -21,14 +21,24 @@ in
     modules = with n9.lib.home-modules; [
       desktop.pop-shell
       v12n.boxes
-      { programs.ssh.includes = [ "config.d/*" ]; }
       miscell.git
+      {
+        programs.git.includes = [
+          {
+            path = "~/.config/git/work"; # TODO: config.xdg.configHome?
+            condition = "hasconfig:remote.*.url:*://*-inc.com*/**";
+          }
+        ];
+      }
       (miscell.ssh {
         ed25519.private = "${secret}/id_ed25519";
         ed25519.public = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICw9akIf3We4wbAwVfaqr8ANZYHLbtQ5sQGz1W5ZUE8Y byte@evil";
       })
+      { programs.ssh.includes = [ "config.d/*" ]; }
     ];
 
-    secrets = n9.lib.utils.secret "${secret}/ssh" ".ssh/config.d/hosts";
+    secrets =
+      (n9.lib.utils.secret "${secret}/ssh" ".ssh/config.d/hosts")
+      // (n9.lib.utils.secret "${secret}/git" ".config/git/work");
   };
 }
