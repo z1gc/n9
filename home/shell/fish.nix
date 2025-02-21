@@ -131,9 +131,6 @@ in
         bind --mode default ';' '_fzf_switch_common ";"' # e.g. f;, h;, ...
         bind --mode default ':' '_fzf_switch_common ":"' # accept previous token as argument
 
-        # https://github.com/kpbaks/autols.fish/issues/3
-        set -g __autols_last_dir ""
-
         # https://linux.overshoot.tv/wiki/ls
         set -gx LS_COLORS (string replace -a '05;' "" "$LS_COLORS")
 
@@ -157,6 +154,11 @@ in
         simplified_ui = true;
         default_shell = "fish";
       };
+
+      # don't replace the default shell, change ptyxis or other terminals to
+      # invoke zellij:
+      enableBashIntegration = false;
+      enableFishIntegration = false;
     };
 
     # deps:

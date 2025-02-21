@@ -15,17 +15,17 @@ NixOS (partial) configurations of mine. Break it!
 # ()ctothorp
 
 ```bash
+# to enter
+direnv allow
+
 # switch local
-nix run
+burn
 
 # or remote
-nix run . evil
+burn evil
 
-# nixos-anywhere install
-nix run '.#install' evil
-
-# nix gc
-nix run '.#gc'
+# nixos-anywhere
+burn-install evil
 ```
 
 Checkout `mach` directory for my own builds, using [colmena](https://github.com/zhaofengli/colmena).
